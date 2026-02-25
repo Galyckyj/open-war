@@ -1,5 +1,5 @@
 import type { GameState, PlayerId } from '../../shared/types';
-import { MAP } from '../../shared/constants';
+import type { GameUISnapshot } from '../hooks/useGameSocket';
 
 function formatTroops(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -8,15 +8,15 @@ function formatTroops(n: number): string {
 }
 
 interface LeaderboardProps {
-  state: GameState | null;
+  uiSnapshot: GameUISnapshot | null;
   playerId: string | null;
 }
 
-export function Leaderboard({ state, playerId }: LeaderboardProps) {
-  if (!state) return null;
+export function Leaderboard({ uiSnapshot, playerId }: LeaderboardProps) {
+  if (!uiSnapshot) return null;
 
-  const totalLand = state.cells.filter((c) => c.terrain === 'land').length;
-  const players = Object.values(state.players)
+  const totalLand = Object.values(uiSnapshot.players).reduce((s, p) => s + p.score, 0);
+  const players = Object.values(uiSnapshot.players)
     .filter((p) => p.score > 0)
     .sort((a, b) => b.score - a.score);
 

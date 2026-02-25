@@ -1,6 +1,5 @@
 /**
  * Шар базового терену (вода, суша, береги) — один раз в offscreen ImageData, потім drawImage.
- * Збірка canvas у requestIdleCallback, щоб не блокувати вхід у кімнату.
  */
 
 import { MAP } from '../../../shared/constants';
@@ -14,7 +13,6 @@ export class TerrainLayer implements Layer {
   visible = true;
   private offscreenCanvas: HTMLCanvasElement | null = null;
   private cachedTerrainKey: string | null = null;
-  private buildScheduled = false;
   private onTerrainBuilt: (() => void) | null = null;
 
   setOnTerrainBuilt(cb: () => void): void {
@@ -51,16 +49,8 @@ export class TerrainLayer implements Layer {
 
     const key = `${terrainFromMap.width}x${terrainFromMap.height}`;
     if (this.cachedTerrainKey !== key || !this.offscreenCanvas) {
-      if (!this.offscreenCanvas && !this.buildScheduled) {
-        this.buildScheduled = true;
-        this.cachedTerrainKey = key;
-        const data = terrainFromMap;
-        const schedule = typeof requestIdleCallback !== 'undefined' ? requestIdleCallback : (fn: () => void) => setTimeout(fn, 0);
-        schedule(() => {
-          this.buildTerrainCanvas(data);
-          this.buildScheduled = false;
-        }, { timeout: 800 });
-      }
+      this.cachedTerrainKey = key;
+      this.buildTerrainCanvas(terrainFromMap);
     }
     if (this.offscreenCanvas) {
       c.imageSmoothingEnabled = false;

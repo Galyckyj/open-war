@@ -23,18 +23,16 @@ function useLatestRef<T>(value: T) {
 }
 
 interface GameCanvasProps {
-  state: GameState | null;
-  stateRef?: React.RefObject<GameState | null>;
+  state?: GameState | null;
+  stateRef: React.RefObject<GameState | null>;
   playerId: string | null;
   selectedCell: number | null;
   onCellClick?: (index: number) => void;
 }
 
-export function GameCanvas({ state, stateRef: stateRefProp, playerId, onCellClick }: GameCanvasProps) {
+export function GameCanvas({ stateRef, playerId, selectedCell: _selectedCell, onCellClick }: GameCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const onCellClickRef = useLatestRef(onCellClick);
-  const internalStateRef = useLatestRef(state);
-  const stateRef = stateRefProp ?? internalStateRef;
   const rendererRef = useRef<GameRenderer | null>(null);
   const viewRef = useRef({ worldX: 0, worldY: 0, scale: 1 });
   const worldSizeRef = useRef<{ w: number; h: number }>({ w: DEFAULT_WORLD_W, h: DEFAULT_WORLD_H });

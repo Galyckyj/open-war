@@ -4,6 +4,7 @@ import { useGameSocket } from '../hooks/useGameSocket';
 import { GameCanvas } from '../components/GameCanvas';
 import { Leaderboard } from '../components/Leaderboard';
 import { TroopSlider } from '../components/TroopSlider';
+import { DebugOverlay } from '../components/DebugOverlay';
 
 function getPlayerId(): string {
   let id = localStorage.getItem('ow_player_id');
@@ -24,19 +25,22 @@ export function GamePage() {
   const nickname = getNickname();
   const [troopPct, setTroopPct] = useState(40);
 
-  const { state, stateRef, connected, sendSpawn, sendAttack } = useGameSocket(playerId, nickname, roomId);
+  const { stateRef, statsRef, uiSnapshot, connected, sendSpawn, sendAttack } = useGameSocket(playerId, nickname, roomId);
 
   const handleCellClick = (tile: number) => {
-    if (!state || !playerId) return;
-    const cell = state.cells[tile];
+    const st = stateRef.current;
+    if (!st || !playerId) return;
+    const cell = st.cells[tile];
     // Воду захопити не можна — тільки суша
     if (!cell || cell.terrain !== 'land') return;
-    const hasTerritory = state.cells.some((c) => c.ownerId === playerId);
+    const hasTerritory = st.cells.some((c) => c.ownerId === playerId);
     if (!hasTerritory) {
       sendSpawn(tile);
     } else {
-      const me = state.players[playerId];
+      const me = st.players[playerId];
       const troopsToSend = me ? Math.floor(me.troops * (troopPct / 100)) : undefined;
+      // Атакуємо лише по суші (дубль-перевірка, основна — terrain !== 'land' вище)
+      if (cell.terrain !== 'land') return;
       if (cell.ownerId === null) {
         sendAttack(null, troopsToSend);
       } else if (cell.ownerId !== playerId) {
@@ -48,13 +52,13 @@ export function GamePage() {
   return (
     <div className="w-screen h-screen overflow-hidden relative">
       <GameCanvas
-        state={state}
         stateRef={stateRef}
         playerId={playerId}
         selectedCell={null}
         onCellClick={handleCellClick}
       />
-      <Leaderboard state={state} playerId={playerId} />
+      <Leaderboard uiSnapshot={uiSnapshot} playerId={playerId} />
+      <DebugOverlay statsRef={statsRef} />
       <TroopSlider value={troopPct} onChange={setTroopPct} />
       {!connected && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 px-4 py-2 bg-amber-900/90 rounded text-center text-white">
