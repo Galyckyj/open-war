@@ -22,6 +22,7 @@ export interface Player {
 
 export interface Cell {
   index: number;
+  /** 'land' — можна захопити/спавнити; 'water' — непрохідна (як стіна), туди не зайти. */
   terrain: 'land' | 'water';
   ownerId: PlayerId | null;
 }

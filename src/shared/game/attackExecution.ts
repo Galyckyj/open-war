@@ -1,7 +1,7 @@
 /**
  * Виконання атак щотіку: пріоритетна черга, захоплення території.
  * Як OpenFrontIO: черга персистентна між тіками, не скидається щоразу.
- * НЕ клонуємо весь масив cells — мутуємо тільки змінені клітинки.
+ * Клонуємо масив cells (shallow) щоб сервер міг порахувати delta для клієнта.
  */
 
 import type { GameState } from "../types";
@@ -35,8 +35,8 @@ export function tickAttacks(state: GameState): GameState {
     return { ...state, attacks: [] };
   }
 
-  // НЕ клонуємо весь масив — мутуємо cells напряму
-  const cells = state.cells;
+  // Shallow copy масиву — інакше prevState.cells === room.state.cells і delta завжди порожня
+  const cells = (state.cells ?? []).slice();
   const cols = state.cols;
   const rows = state.rows;
   const tick = state.tick;

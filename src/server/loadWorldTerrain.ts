@@ -47,7 +47,7 @@ function loadFromBin(
   }
 }
 
-/** Спершу mini_map.bin (наш формат), потім map4x.bin (OpenFrontIO). */
+/** Спершу map4x.bin (1000×500), потім mini_map.bin якщо є. */
 function loadFromOpenFrontBins(): TerrainCell[] | null {
   const manifestPath = join(OPENFRONT_DIR, 'manifest.json');
   if (!existsSync(manifestPath)) return null;
@@ -57,13 +57,13 @@ function loadFromOpenFrontBins(): TerrainCell[] | null {
   } catch {
     return null;
   }
-  const miniPath = join(OPENFRONT_DIR, 'mini_map.bin');
   const map4xPath = join(OPENFRONT_DIR, 'map4x.bin');
-  if (manifest.mini_map && existsSync(miniPath)) {
-    return loadFromBin(manifestPath, miniPath, manifest.mini_map);
-  }
+  const miniPath = join(OPENFRONT_DIR, 'mini_map.bin');
   if (manifest.map4x && existsSync(map4xPath)) {
     return loadFromBin(manifestPath, map4xPath, manifest.map4x);
+  }
+  if (manifest.mini_map && existsSync(miniPath)) {
+    return loadFromBin(manifestPath, miniPath, manifest.mini_map);
   }
   return null;
 }

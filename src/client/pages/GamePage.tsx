@@ -31,7 +31,7 @@ export function GamePage() {
     const st = stateRef.current;
     if (!st || !playerId) return;
     const cell = st.cells[tile];
-    // Воду захопити не можна — тільки суша
+    // Вода непрохідна (як стіна) — клік по воді ігноруємо
     if (!cell || cell.terrain !== 'land') return;
     const hasTerritory = st.cells.some((c) => c.ownerId === playerId);
     if (!hasTerritory) {

@@ -1,6 +1,6 @@
 /**
  * Завантаження згенерованої карти з public/maps (як OpenFrontIO).
- * Бере manifest.json + mini_map.bin або map4x.bin і повертає терен для відмальовування.
+ * Бере manifest.json + map4x.bin (або mini_map.bin) і повертає терен для відмальовування.
  */
 
 const MAP_BASE = '/maps/world';
@@ -84,7 +84,7 @@ export function getTerrainColorFromPackedByte(byte: number): [number, number, nu
 
 /**
  * Завантажує карту з basePath (наприклад /maps/world).
- * Спершу пробує mini_map.bin, потім map4x.bin.
+ * Пріоритет: map4x.bin (1000×500), потім mini_map.bin якщо є.
  */
 export async function loadMapDataFromPath(
   basePath: string = MAP_BASE,
@@ -94,21 +94,22 @@ export async function loadMapDataFromPath(
     if (!manifestRes.ok) return null;
     const manifest = (await manifestRes.json()) as MapManifest;
 
-    let width: number;
-    let height: number;
-    let binUrl: string;
+    // Спершу map4x.bin (основна карта), інакше mini_map.bin
+    let width: number | undefined;
+    let height: number | undefined;
+    let binUrl: string | undefined;
 
-    if (manifest.mini_map?.width && manifest.mini_map?.height) {
-      width = manifest.mini_map.width;
-      height = manifest.mini_map.height;
-      binUrl = `${basePath}/mini_map.bin`;
-    } else if (manifest.map4x?.width && manifest.map4x?.height) {
+    if (manifest.map4x?.width && manifest.map4x?.height) {
       width = manifest.map4x.width;
       height = manifest.map4x.height;
       binUrl = `${basePath}/map4x.bin`;
-    } else {
-      return null;
+    } else if (manifest.mini_map?.width && manifest.mini_map?.height) {
+      width = manifest.mini_map.width;
+      height = manifest.mini_map.height;
+      binUrl = `${basePath}/mini_map.bin`;
     }
+
+    if (width === undefined || height === undefined || !binUrl) return null;
 
     const binRes = await fetch(binUrl);
     if (!binRes.ok) return null;

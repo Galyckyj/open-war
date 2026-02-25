@@ -1,7 +1,7 @@
 /**
  * Шар територій — як OpenFrontIO: persistentний ImageData, оновлюємо тільки змінені тайли.
  * Замість перемальовки всіх 256k пікселів кожен кадр — тільки delta з lastDeltaIndices.
- * Alpha 150 = fill, 255 = кордон. Вода ніколи не отримує колір.
+ * Alpha 150 = fill, 255 = кордон. Вода непрохідна (як стіна) — територія туди не поширюється і не малюється.
  */
 
 import type { Layer, RenderContext } from "../types";
@@ -59,8 +59,11 @@ export class TerritoryLayer implements Layer {
     const o = i * 4;
     const cell = cells[i];
 
-    // Вода або нейтральна суша — прозора
+    // Вода = непрохідна (стіна): територія лише на суші
     if (!cell || cell.terrain !== "land" || cell.ownerId === null) {
+      pix[o] = 0;
+      pix[o + 1] = 0;
+      pix[o + 2] = 0;
       pix[o + 3] = 0;
       return;
     }
@@ -102,30 +105,29 @@ export class TerritoryLayer implements Layer {
     if (cells.length === 0) return;
 
     const needFullRedraw = this.ensureCanvas(cols, rows);
+    const changed = state.lastDeltaIndices;
 
-    if (needFullRedraw) {
-      // Повна перемальовка тільки при першому рендері або зміні розміру
+    // Повна перемальовка: новий буфер, зміна розміру або перший стан (ще не було tick з delta)
+    const doFullRedraw =
+      needFullRedraw || changed === undefined;
+
+    if (doFullRedraw) {
       for (let i = 0; i < cols * rows; i++) {
         this.paintTile(i, cells, players, cols, rows);
       }
-    } else {
-      // Інкрементальне оновлення — тільки змінені тайли + їх сусіди (як OpenFrontIO)
-      const changed = state.lastDeltaIndices;
-      if (changed && changed.length > 0) {
-        const toRepaint = new Set<number>();
-        for (const idx of changed) {
-          toRepaint.add(idx);
-          // Перемальовуємо сусідів бо їх статус кордону міг змінитись
-          const x = idx % cols,
-            y = Math.floor(idx / cols);
-          if (x > 0) toRepaint.add(idx - 1);
-          if (x < cols - 1) toRepaint.add(idx + 1);
-          if (y > 0) toRepaint.add(idx - cols);
-          if (y < rows - 1) toRepaint.add(idx + cols);
-        }
-        for (const i of toRepaint) {
-          this.paintTile(i, cells, players, cols, rows);
-        }
+    } else if (changed.length > 0) {
+      // Інкрементальне оновлення після тіку: оновлюємо imageData тільки для змінених тайлів + 4 сусіди (кордон сусідів теж міняється)
+      const toRepaint = new Set<number>(changed);
+      for (const idx of changed) {
+        const x = idx % cols;
+        const y = Math.floor(idx / cols);
+        if (x > 0) toRepaint.add(idx - 1);
+        if (x < cols - 1) toRepaint.add(idx + 1);
+        if (y > 0) toRepaint.add(idx - cols);
+        if (y < rows - 1) toRepaint.add(idx + cols);
+      }
+      for (const i of toRepaint) {
+        this.paintTile(i, cells, players, cols, rows);
       }
     }
 

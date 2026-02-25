@@ -16,7 +16,8 @@ export class GameRenderer {
   private scale = 1;
   private playerId: string | null = null;
   private backgroundImage: HTMLImageElement | null = null;
-  private worldWidth = 512;
+  /** Має збігатись з MAP (1000×500) / map4x.bin, інакше клік дає неправильний індекс. */
+  private worldWidth = 1000;
   private worldHeight = 500;
   private dpr = 1;
   private terrainFromMap: {
