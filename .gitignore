@@ -1,0 +1,7 @@
+build/
+node_modules/
+out/
+
+# Артефакти tsc (вихідний код — .ts/.tsx; Vite сам збирає)
+src/**/*.js
+src/**/*.js.map
