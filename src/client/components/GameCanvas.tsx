@@ -2,11 +2,16 @@
  * Canvas 2D карта з кастомним GameRenderer (шари + viewport culling), за зразком OpenFrontIO.
  */
 
-import { useEffect, useRef } from 'react';
-import type { GameState } from '../../shared/types';
-import { MAP } from '../../shared/constants';
-import { GameRenderer, TerrainLayer, TerritoryLayer, UILayer } from '../graphics';
-import { loadMapDataFromPath } from '../mapLoader';
+import { useEffect, useRef } from "react";
+import type { GameState } from "../../shared/types";
+import { MAP } from "../../shared/constants";
+import {
+  GameRenderer,
+  TerrainLayer,
+  TerritoryLayer,
+  UILayer,
+} from "../graphics";
+import { loadMapDataFromPath } from "../mapLoader";
 
 const COLS = MAP.COLS;
 const ROWS = MAP.ROWS;
@@ -30,12 +35,20 @@ interface GameCanvasProps {
   onCellClick?: (index: number) => void;
 }
 
-export function GameCanvas({ stateRef, playerId, selectedCell: _selectedCell, onCellClick }: GameCanvasProps) {
+export function GameCanvas({
+  stateRef,
+  playerId,
+  selectedCell: _selectedCell,
+  onCellClick,
+}: GameCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const onCellClickRef = useLatestRef(onCellClick);
   const rendererRef = useRef<GameRenderer | null>(null);
   const viewRef = useRef({ worldX: 0, worldY: 0, scale: 1 });
-  const worldSizeRef = useRef<{ w: number; h: number }>({ w: DEFAULT_WORLD_W, h: DEFAULT_WORLD_H });
+  const worldSizeRef = useRef<{ w: number; h: number }>({
+    w: DEFAULT_WORLD_W,
+    h: DEFAULT_WORLD_H,
+  });
 
   useEffect(() => {
     const el = containerRef.current;
@@ -45,12 +58,12 @@ export function GameCanvas({ stateRef, playerId, selectedCell: _selectedCell, on
     const H = el.clientHeight || window.innerHeight;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
-    const canvas = document.createElement('canvas');
+    const canvas = document.createElement("canvas");
     canvas.width = W * dpr;
     canvas.height = H * dpr;
     canvas.style.width = `${W}px`;
     canvas.style.height = `${H}px`;
-    canvas.style.display = 'block';
+    canvas.style.display = "block";
     el.appendChild(canvas);
 
     const renderer = new GameRenderer(canvas);
@@ -63,14 +76,20 @@ export function GameCanvas({ stateRef, playerId, selectedCell: _selectedCell, on
         worldY: (H - worldH * initScale) / 2,
         scale: initScale,
       };
-      renderer.setView(viewRef.current.worldX, viewRef.current.worldY, viewRef.current.scale);
+      renderer.setView(
+        viewRef.current.worldX,
+        viewRef.current.worldY,
+        viewRef.current.scale,
+      );
     };
     renderer.setWorldSize(COLS, ROWS);
     fitView(DEFAULT_WORLD_W, DEFAULT_WORLD_H);
     renderer.setPlayerId(playerId);
     const terrainLayer = new TerrainLayer();
     terrainLayer.setOnTerrainBuilt(() => {
-      requestAnimationFrame(() => rendererRef.current?.render(stateRef.current));
+      requestAnimationFrame(() =>
+        rendererRef.current?.render(stateRef.current),
+      );
     });
     renderer.addLayer(terrainLayer);
     renderer.addLayer(new TerritoryLayer());
@@ -79,14 +98,14 @@ export function GameCanvas({ stateRef, playerId, selectedCell: _selectedCell, on
 
     let rafId = 0;
     const renderLoop = () => {
-      if (rendererRef.current && stateRef.current) {
+      if (rendererRef.current) {
         rendererRef.current.render(stateRef.current);
       }
       rafId = requestAnimationFrame(renderLoop);
     };
     rafId = requestAnimationFrame(renderLoop);
 
-    loadMapDataFromPath('/maps/world').then((mapData) => {
+    loadMapDataFromPath("/maps/world").then((mapData) => {
       if (mapData && rendererRef.current) {
         rendererRef.current.setTerrainFromMap(
           mapData.terrain,
@@ -113,7 +132,11 @@ export function GameCanvas({ stateRef, playerId, selectedCell: _selectedCell, on
         worldY: my - (my - v.worldY) * ratio,
         scale: newScale,
       };
-      renderer.setView(viewRef.current.worldX, viewRef.current.worldY, viewRef.current.scale);
+      renderer.setView(
+        viewRef.current.worldX,
+        viewRef.current.worldY,
+        viewRef.current.scale,
+      );
       renderer.render(stateRef.current);
     };
 
@@ -139,7 +162,11 @@ export function GameCanvas({ stateRef, playerId, selectedCell: _selectedCell, on
       if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragMoved = true;
       viewRef.current.worldX = worldStartX + dx;
       viewRef.current.worldY = worldStartY + dy;
-      renderer.setView(viewRef.current.worldX, viewRef.current.worldY, viewRef.current.scale);
+      renderer.setView(
+        viewRef.current.worldX,
+        viewRef.current.worldY,
+        viewRef.current.scale,
+      );
       renderer.render(stateRef.current);
     };
     const onPointerUp = (e: PointerEvent) => {
@@ -173,25 +200,29 @@ export function GameCanvas({ stateRef, playerId, selectedCell: _selectedCell, on
       canvas.style.height = `${h}px`;
       renderer.setSize(w, h);
       renderer.setDevicePixelRatio(dpr);
-      renderer.setView(viewRef.current.worldX, viewRef.current.worldY, viewRef.current.scale);
+      renderer.setView(
+        viewRef.current.worldX,
+        viewRef.current.worldY,
+        viewRef.current.scale,
+      );
       renderer.render(stateRef.current);
     };
-    window.addEventListener('resize', handleResize);
+    window.addEventListener("resize", handleResize);
 
-    el.addEventListener('wheel', onWheel, { passive: false });
-    el.addEventListener('pointerdown', onPointerDown);
-    el.addEventListener('pointermove', onPointerMove);
-    el.addEventListener('pointerup', onPointerUp);
+    el.addEventListener("wheel", onWheel, { passive: false });
+    el.addEventListener("pointerdown", onPointerDown);
+    el.addEventListener("pointermove", onPointerMove);
+    el.addEventListener("pointerup", onPointerUp);
 
     renderer.render(stateRef.current);
 
     return () => {
       cancelAnimationFrame(rafId);
-      window.removeEventListener('resize', handleResize);
-      el.removeEventListener('wheel', onWheel);
-      el.removeEventListener('pointerdown', onPointerDown);
-      el.removeEventListener('pointermove', onPointerMove);
-      el.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener("resize", handleResize);
+      el.removeEventListener("wheel", onWheel);
+      el.removeEventListener("pointerdown", onPointerDown);
+      el.removeEventListener("pointermove", onPointerMove);
+      el.removeEventListener("pointerup", onPointerUp);
       canvas.remove();
       rendererRef.current = null;
     };
@@ -201,13 +232,22 @@ export function GameCanvas({ stateRef, playerId, selectedCell: _selectedCell, on
     const r = rendererRef.current;
     if (!r) return;
     r.setPlayerId(playerId);
-    r.setView(viewRef.current.worldX, viewRef.current.worldY, viewRef.current.scale);
+    r.setView(
+      viewRef.current.worldX,
+      viewRef.current.worldY,
+      viewRef.current.scale,
+    );
   }, [playerId]);
 
   return (
     <div
       ref={containerRef}
-      style={{ width: '100vw', height: '100vh', overflow: 'hidden', cursor: 'grab' }}
+      style={{
+        width: "100vw",
+        height: "100vh",
+        overflow: "hidden",
+        cursor: "grab",
+      }}
     />
   );
 }

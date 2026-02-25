@@ -2,9 +2,9 @@
  * Шар базового терену (вода, суша, береги) — один раз в offscreen ImageData, потім drawImage.
  */
 
-import { MAP } from '../../../shared/constants';
-import type { Layer, RenderContext } from '../types';
-import { getTerrainColorFromPackedByte } from '../../mapLoader';
+import { MAP } from "../../../shared/constants";
+import type { Layer, RenderContext } from "../types";
+import { getTerrainColorFromPackedByte } from "../../mapLoader";
 
 const COLS = MAP.COLS;
 const ROWS = MAP.ROWS;
@@ -19,12 +19,16 @@ export class TerrainLayer implements Layer {
     this.onTerrainBuilt = cb;
   }
 
-  private buildTerrainCanvas(terrainFromMap: { data: Uint8Array; width: number; height: number }): void {
+  private buildTerrainCanvas(terrainFromMap: {
+    data: Uint8Array;
+    width: number;
+    height: number;
+  }): void {
     const { data, width, height } = terrainFromMap;
-    const canvas = document.createElement('canvas');
+    const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
-    const ctx = canvas.getContext('2d', { alpha: false });
+    const ctx = canvas.getContext("2d", { alpha: false });
     if (!ctx) return;
     const imageData = ctx.createImageData(width, height);
     const pix = imageData.data;
@@ -45,7 +49,12 @@ export class TerrainLayer implements Layer {
     const { ctx: c, state, worldWidth, worldHeight, terrainFromMap } = ctx;
     const { cols, rows } = state;
 
-    if (!terrainFromMap || terrainFromMap.width !== cols || terrainFromMap.height !== rows) return;
+    if (
+      !terrainFromMap ||
+      terrainFromMap.width !== cols ||
+      terrainFromMap.height !== rows
+    )
+      return;
 
     const key = `${terrainFromMap.width}x${terrainFromMap.height}`;
     if (this.cachedTerrainKey !== key || !this.offscreenCanvas) {

@@ -68,12 +68,10 @@ export function getBorderColor(territoryColor: string): string {
 
 /** Парсить rgb(r,g,b) або #rrggbb рядок у [r,g,b] tuple для ImageData. */
 export function hexToRgb(color: string): [number, number, number] {
-  // rgb(r, g, b) формат
   const rgbMatch = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
   if (rgbMatch) {
     return [Number(rgbMatch[1]), Number(rgbMatch[2]), Number(rgbMatch[3])];
   }
-  // #rrggbb формат
   if (color.startsWith("#") && color.length === 7) {
     return [
       parseInt(color.slice(1, 3), 16),
@@ -81,12 +79,23 @@ export function hexToRgb(color: string): [number, number, number] {
       parseInt(color.slice(5, 7), 16),
     ];
   }
-  // #rgb скорочений формат
   if (color.startsWith("#") && color.length === 4) {
     const r = parseInt(color[1] + color[1], 16);
     const g = parseInt(color[2] + color[2], 16);
     const b = parseInt(color[3] + color[3], 16);
     return [r, g, b];
   }
-  return [100, 100, 100]; // fallback
+  return [100, 100, 100];
+}
+
+/** Як hexToRgb, але спочатку нормалізує колір через parseColor (HSL → rgb). Для ImageData. */
+export function colorToRgb(color: string): [number, number, number] {
+  const rgb = parseColor(color);
+  const m = rgb.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+  if (m) return [Number(m[1]), Number(m[2]), Number(m[3])];
+  if (rgb.startsWith("#")) {
+    const n = parseInt(rgb.slice(1), 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  return [71, 85, 105];
 }

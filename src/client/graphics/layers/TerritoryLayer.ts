@@ -3,8 +3,13 @@
  * Як у OpenFrontIO: без тисяч fillRect, лише putImageData + drawImage.
  */
 
-import type { Layer, RenderContext } from '../types';
-import { getCellColor, getBorderColor, isBorderTile, colorToRgb } from '../mapUtils';
+import type { Layer, RenderContext } from "../types";
+import {
+  getCellColor,
+  getBorderColor,
+  isBorderTile,
+  colorToRgb,
+} from "../mapUtils";
 
 const TERRITORY_ALPHA = 150; // 0–255
 const BORDER_ALPHA = 255;
@@ -13,7 +18,7 @@ export class TerritoryLayer implements Layer {
   visible = true;
   private offscreenCanvas: HTMLCanvasElement | null = null;
   private imageData: ImageData | null = null;
-  private cachedKey = '';
+  private cachedKey = "";
 
   render(ctx: RenderContext): void {
     const { ctx: c, state, worldWidth, worldHeight } = ctx;
@@ -28,10 +33,10 @@ export class TerritoryLayer implements Layer {
     }
 
     if (!this.offscreenCanvas) {
-      this.offscreenCanvas = document.createElement('canvas');
+      this.offscreenCanvas = document.createElement("canvas");
       this.offscreenCanvas.width = cols;
       this.offscreenCanvas.height = rows;
-      const offCtx = this.offscreenCanvas.getContext('2d', { alpha: true });
+      const offCtx = this.offscreenCanvas.getContext("2d", { alpha: true });
       if (!offCtx) return;
       this.imageData = offCtx.createImageData(cols, rows);
     }
@@ -52,7 +57,8 @@ export class TerritoryLayer implements Layer {
 
       const fillColor = getCellColor(cell, players);
       const isBorder =
-        cell.terrain === 'land' && isBorderTile(i, cell.ownerId, cells, cols, rows);
+        cell.terrain === "land" &&
+        isBorderTile(i, cell.ownerId, cells, cols, rows);
       const color = isBorder ? getBorderColor(fillColor) : fillColor;
       const alpha = isBorder ? BORDER_ALPHA : TERRITORY_ALPHA;
 
@@ -63,15 +69,21 @@ export class TerritoryLayer implements Layer {
       pix[o + 3] = alpha;
     }
 
-    const offCtx = this.offscreenCanvas!.getContext('2d')!;
+    const offCtx = this.offscreenCanvas!.getContext("2d")!;
     offCtx.putImageData(img, 0, 0);
 
     c.globalAlpha = 1;
     c.imageSmoothingEnabled = false;
     c.drawImage(
       this.offscreenCanvas,
-      0, 0, cols, rows,
-      0, 0, worldWidth, worldHeight,
+      0,
+      0,
+      cols,
+      rows,
+      0,
+      0,
+      worldWidth,
+      worldHeight,
     );
   }
 }

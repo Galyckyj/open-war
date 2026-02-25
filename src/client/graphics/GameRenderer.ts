@@ -86,16 +86,18 @@ export class GameRenderer {
   }
 
   render(state: GameState | null): void {
+    this.ctx.save();
+    this.ctx.scale(this.dpr, this.dpr);
+    this.ctx.fillStyle = '#060d14';
+    this.ctx.fillRect(0, 0, this.width, this.height);
+    this.ctx.restore();
+
     if (!state) return;
 
     const viewport = this.getViewport();
 
     this.ctx.save();
     this.ctx.scale(this.dpr, this.dpr);
-
-    this.ctx.fillStyle = '#060d14';
-    this.ctx.fillRect(0, 0, this.width, this.height);
-
     this.ctx.save();
     this.ctx.translate(this.worldX, this.worldY);
     this.ctx.scale(this.scale, this.scale);
