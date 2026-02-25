@@ -23,7 +23,7 @@ export const GAME = {
 } as const;
 
 export const MAP = {
-  COLS: 1000,
+  COLS: 512,
   ROWS: 500,
 } as const;
 

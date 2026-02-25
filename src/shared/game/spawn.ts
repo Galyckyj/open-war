@@ -34,8 +34,12 @@ export function spawnPlayer(state: GameState, playerId: PlayerId, tile: number):
   if (state.cells.some((c) => c.ownerId === playerId)) return state;
   const clusterTiles = getSpawnCluster(tile, state.cells, state.cols, state.rows, GAME.SPAWN_CLUSTER_SIZE);
   if (clusterTiles.length === 0) return state;
-  const next = { ...state, cells: state.cells.map((c) => ({ ...c })), players: { ...state.players } };
-  for (const t of clusterTiles) next.cells[t]!.ownerId = playerId;
+  const cells = state.cells.slice();
+  const next = { ...state, cells, players: { ...state.players } };
+  for (const t of clusterTiles) {
+    const cell = next.cells[t];
+    if (cell?.terrain === 'land') next.cells[t] = { ...cell, ownerId: playerId };
+  }
   const player = next.players[playerId];
   if (player) next.players[playerId] = { ...player, troops: GAME.SPAWN_TROOPS };
   return recomputeScores(next);

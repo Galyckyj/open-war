@@ -11,7 +11,10 @@ export function getBorderTiles(state: GameState, playerId: PlayerId): number[] {
   for (let i = 0; i < cells.length; i++) {
     const c = cells[i];
     if (!c || c.ownerId !== playerId || c.terrain !== 'land') continue;
-    if (getNeighbors(i, cols, rows).some((n) => cells[n]?.ownerId !== playerId)) out.push(i);
+    if (getNeighbors(i, cols, rows).some((n) => {
+      const nc = cells[n];
+      return nc?.terrain === 'land' && nc.ownerId !== playerId;
+    })) out.push(i);
   }
   return out;
 }
@@ -27,7 +30,7 @@ export function getTerrainMag(cell: Cell): number {
 export function recomputeScores(state: GameState): GameState {
   const counts: Record<string, number> = {};
   for (const cell of state.cells ?? []) {
-    if (cell.ownerId) counts[cell.ownerId] = (counts[cell.ownerId] ?? 0) + 1;
+    if (cell.ownerId && cell.terrain === 'land') counts[cell.ownerId] = (counts[cell.ownerId] ?? 0) + 1;
   }
   const next = { ...state, players: { ...state.players } };
   for (const [id, player] of Object.entries(next.players)) {

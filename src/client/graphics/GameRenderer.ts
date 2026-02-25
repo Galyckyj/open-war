@@ -3,8 +3,8 @@
  * Керує шарами та викликає їх render з viewport і transform.
  */
 
-import type { GameState } from '../../shared/types';
-import type { Layer, RenderContext, Viewport } from './types';
+import type { GameState } from "../../shared/types";
+import type { Layer, RenderContext, Viewport } from "./types";
 
 export class GameRenderer {
   private ctx: CanvasRenderingContext2D;
@@ -16,14 +16,18 @@ export class GameRenderer {
   private scale = 1;
   private playerId: string | null = null;
   private backgroundImage: HTMLImageElement | null = null;
-  private worldWidth = 1000;
+  private worldWidth = 512;
   private worldHeight = 500;
   private dpr = 1;
-  private terrainFromMap: { data: Uint8Array; width: number; height: number } | null = null;
+  private terrainFromMap: {
+    data: Uint8Array;
+    width: number;
+    height: number;
+  } | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
-    const ctx = canvas.getContext('2d', { alpha: false });
-    if (!ctx) throw new Error('2d context not supported');
+    const ctx = canvas.getContext("2d", { alpha: false });
+    if (!ctx) throw new Error("2d context not supported");
     this.ctx = ctx;
   }
 
@@ -88,7 +92,7 @@ export class GameRenderer {
   render(state: GameState | null): void {
     this.ctx.save();
     this.ctx.scale(this.dpr, this.dpr);
-    this.ctx.fillStyle = '#060d14';
+    this.ctx.fillStyle = "#060d14";
     this.ctx.fillRect(0, 0, this.width, this.height);
     this.ctx.restore();
 

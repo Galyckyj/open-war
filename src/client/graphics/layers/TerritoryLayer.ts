@@ -1,6 +1,7 @@
 /**
- * Шар територій гравців — один буфер ImageData (1 піксель = 1 клітинка) + один drawImage за кадр.
- * Як у OpenFrontIO: без тисяч fillRect, лише putImageData + drawImage.
+ * Шар територій гравців — ImageData/putImageData (як OpenFrontIO).
+ * Перемальовується кожен кадр — інакше оновлення territory не видно.
+ * Alpha 150 = напівпрозоре заповнення (terrain просвічує), 255 = кордон.
  */
 
 import type { Layer, RenderContext } from "../types";
@@ -11,79 +12,95 @@ import {
   colorToRgb,
 } from "../mapUtils";
 
-const TERRITORY_ALPHA = 150; // 0–255
+const TERRITORY_ALPHA = 150;
 const BORDER_ALPHA = 255;
 
 export class TerritoryLayer implements Layer {
   visible = true;
   private offscreenCanvas: HTMLCanvasElement | null = null;
+  private offscreenCtx: CanvasRenderingContext2D | null = null;
   private imageData: ImageData | null = null;
-  private cachedKey = "";
+  private lastCols = 0;
+  private lastRows = 0;
 
   render(ctx: RenderContext): void {
     const { ctx: c, state, worldWidth, worldHeight } = ctx;
     const cells = state.cells ?? [];
     const { players, cols, rows } = state;
 
-    const key = `${cols}x${rows}`;
-    if (this.cachedKey !== key || !this.offscreenCanvas) {
-      this.cachedKey = key;
-      this.offscreenCanvas = null;
-      this.imageData = null;
-    }
+    if (cells.length === 0) return;
 
-    if (!this.offscreenCanvas) {
+    // Пересоздаємо offscreen якщо розмір змінився
+    if (
+      !this.offscreenCanvas ||
+      this.lastCols !== cols ||
+      this.lastRows !== rows
+    ) {
       this.offscreenCanvas = document.createElement("canvas");
       this.offscreenCanvas.width = cols;
       this.offscreenCanvas.height = rows;
-      const offCtx = this.offscreenCanvas.getContext("2d", { alpha: true });
-      if (!offCtx) return;
-      this.imageData = offCtx.createImageData(cols, rows);
+      this.offscreenCtx = this.offscreenCanvas.getContext("2d", {
+        alpha: true,
+      });
+      this.imageData = this.offscreenCtx!.createImageData(cols, rows);
+      this.lastCols = cols;
+      this.lastRows = rows;
     }
 
-    const img = this.imageData!;
-    const pix = img.data;
+    const pix = this.imageData!.data;
 
-    for (let i = 0; i < cells.length; i++) {
+    // Кеші кольорів щоб не парсити HSL кожен піксель
+    const fillRgbCache = new Map<string, [number, number, number]>();
+    const borderRgbCache = new Map<string, [number, number, number]>();
+
+    for (let i = 0; i < cols * rows; i++) {
       const cell = cells[i];
       const o = i * 4;
-      if (!cell || cell.ownerId === null) {
-        pix[o] = 0;
-        pix[o + 1] = 0;
-        pix[o + 2] = 0;
-        pix[o + 3] = 0;
+
+      // Воду ніколи не малюємо як територію — кордон зупиняється на березі
+      if (!cell || cell.terrain !== "land" || cell.ownerId === null) {
+        pix[o + 3] = 0; // прозорий — terrain просвічує
         continue;
       }
 
-      const fillColor = getCellColor(cell, players);
-      const isBorder =
-        cell.terrain === "land" &&
-        isBorderTile(i, cell.ownerId, cells, cols, rows);
-      const color = isBorder ? getBorderColor(fillColor) : fillColor;
-      const alpha = isBorder ? BORDER_ALPHA : TERRITORY_ALPHA;
+      const fillHex = getCellColor(cell, players);
+      const isBorder = isBorderTile(i, cell.ownerId, cells, cols, rows);
 
-      const [r, g, b] = colorToRgb(color);
-      pix[o] = r;
-      pix[o + 1] = g;
-      pix[o + 2] = b;
+      let rgb: [number, number, number];
+      let alpha: number;
+
+      if (isBorder) {
+        let cached = borderRgbCache.get(fillHex);
+        if (!cached) {
+          cached = colorToRgb(getBorderColor(fillHex));
+          borderRgbCache.set(fillHex, cached);
+        }
+        rgb = cached;
+        alpha = BORDER_ALPHA;
+      } else {
+        let cached = fillRgbCache.get(fillHex);
+        if (!cached) {
+          cached = colorToRgb(fillHex);
+          fillRgbCache.set(fillHex, cached);
+        }
+        rgb = cached;
+        alpha = TERRITORY_ALPHA;
+      }
+
+      pix[o] = rgb[0];
+      pix[o + 1] = rgb[1];
+      pix[o + 2] = rgb[2];
       pix[o + 3] = alpha;
     }
 
-    const offCtx = this.offscreenCanvas!.getContext("2d")!;
-    offCtx.putImageData(img, 0, 0);
+    this.offscreenCtx!.putImageData(this.imageData!, 0, 0);
 
-    c.globalAlpha = 1;
+    // Малюємо в ті самі world-координати, що й терен (worldWidth×worldHeight), щоб територія збігалась з кліком
     c.imageSmoothingEnabled = false;
     c.drawImage(
-      this.offscreenCanvas,
-      0,
-      0,
-      cols,
-      rows,
-      0,
-      0,
-      worldWidth,
-      worldHeight,
+      this.offscreenCanvas!,
+      0, 0, cols, rows,
+      0, 0, worldWidth, worldHeight,
     );
   }
 }

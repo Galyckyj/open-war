@@ -86,11 +86,6 @@ export function GameCanvas({
     fitView(DEFAULT_WORLD_W, DEFAULT_WORLD_H);
     renderer.setPlayerId(playerId);
     const terrainLayer = new TerrainLayer();
-    terrainLayer.setOnTerrainBuilt(() => {
-      requestAnimationFrame(() =>
-        rendererRef.current?.render(stateRef.current),
-      );
-    });
     renderer.addLayer(terrainLayer);
     renderer.addLayer(new TerritoryLayer());
     renderer.addLayer(new UILayer());
