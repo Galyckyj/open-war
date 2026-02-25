@@ -1,7 +1,7 @@
 /**
- * Шар територій гравців — ImageData/putImageData (як OpenFrontIO).
- * Перемальовується кожен кадр — інакше оновлення territory не видно.
- * Alpha 150 = напівпрозоре заповнення (terrain просвічує), 255 = кордон.
+ * Шар територій — як OpenFrontIO: persistentний ImageData, оновлюємо тільки змінені тайли.
+ * Замість перемальовки всіх 256k пікселів кожен кадр — тільки delta з lastDeltaIndices.
+ * Alpha 150 = fill, 255 = кордон. Вода ніколи не отримує колір.
  */
 
 import type { Layer, RenderContext } from "../types";
@@ -22,15 +22,11 @@ export class TerritoryLayer implements Layer {
   private imageData: ImageData | null = null;
   private lastCols = 0;
   private lastRows = 0;
+  // Кеші кольорів між кадрами (як OpenFrontIO — колір не змінюється у гравця)
+  private fillRgbCache = new Map<string, [number, number, number]>();
+  private borderRgbCache = new Map<string, [number, number, number]>();
 
-  render(ctx: RenderContext): void {
-    const { ctx: c, state, worldWidth, worldHeight } = ctx;
-    const cells = state.cells ?? [];
-    const { players, cols, rows } = state;
-
-    if (cells.length === 0) return;
-
-    // Пересоздаємо offscreen якщо розмір змінився
+  private ensureCanvas(cols: number, rows: number): boolean {
     if (
       !this.offscreenCanvas ||
       this.lastCols !== cols ||
@@ -41,66 +37,110 @@ export class TerritoryLayer implements Layer {
       this.offscreenCanvas.height = rows;
       this.offscreenCtx = this.offscreenCanvas.getContext("2d", {
         alpha: true,
-      });
-      this.imageData = this.offscreenCtx!.createImageData(cols, rows);
+      })!;
+      this.imageData = this.offscreenCtx.createImageData(cols, rows);
       this.lastCols = cols;
       this.lastRows = rows;
+      this.fillRgbCache.clear();
+      this.borderRgbCache.clear();
+      return true; // потрібна повна перемальовка
+    }
+    return false;
+  }
+
+  private paintTile(
+    i: number,
+    cells: RenderContext["state"]["cells"],
+    players: RenderContext["state"]["players"],
+    cols: number,
+    rows: number,
+  ) {
+    const pix = this.imageData!.data;
+    const o = i * 4;
+    const cell = cells[i];
+
+    // Вода або нейтральна суша — прозора
+    if (!cell || cell.terrain !== "land" || cell.ownerId === null) {
+      pix[o + 3] = 0;
+      return;
     }
 
-    const pix = this.imageData!.data;
+    const fillHex = getCellColor(cell, players);
+    const border = isBorderTile(i, cell.ownerId, cells, cols, rows);
 
-    // Кеші кольорів щоб не парсити HSL кожен піксель
-    const fillRgbCache = new Map<string, [number, number, number]>();
-    const borderRgbCache = new Map<string, [number, number, number]>();
+    let rgb: [number, number, number];
+    let alpha: number;
 
-    for (let i = 0; i < cols * rows; i++) {
-      const cell = cells[i];
-      const o = i * 4;
-
-      // Воду ніколи не малюємо як територію — кордон зупиняється на березі
-      if (!cell || cell.terrain !== "land" || cell.ownerId === null) {
-        pix[o + 3] = 0; // прозорий — terrain просвічує
-        continue;
+    if (border) {
+      let cached = this.borderRgbCache.get(fillHex);
+      if (!cached) {
+        cached = colorToRgb(getBorderColor(fillHex));
+        this.borderRgbCache.set(fillHex, cached);
       }
-
-      const fillHex = getCellColor(cell, players);
-      const isBorder = isBorderTile(i, cell.ownerId, cells, cols, rows);
-
-      let rgb: [number, number, number];
-      let alpha: number;
-
-      if (isBorder) {
-        let cached = borderRgbCache.get(fillHex);
-        if (!cached) {
-          cached = colorToRgb(getBorderColor(fillHex));
-          borderRgbCache.set(fillHex, cached);
-        }
-        rgb = cached;
-        alpha = BORDER_ALPHA;
-      } else {
-        let cached = fillRgbCache.get(fillHex);
-        if (!cached) {
-          cached = colorToRgb(fillHex);
-          fillRgbCache.set(fillHex, cached);
-        }
-        rgb = cached;
-        alpha = TERRITORY_ALPHA;
+      rgb = cached;
+      alpha = BORDER_ALPHA;
+    } else {
+      let cached = this.fillRgbCache.get(fillHex);
+      if (!cached) {
+        cached = colorToRgb(fillHex);
+        this.fillRgbCache.set(fillHex, cached);
       }
+      rgb = cached;
+      alpha = TERRITORY_ALPHA;
+    }
 
-      pix[o] = rgb[0];
-      pix[o + 1] = rgb[1];
-      pix[o + 2] = rgb[2];
-      pix[o + 3] = alpha;
+    pix[o] = rgb[0];
+    pix[o + 1] = rgb[1];
+    pix[o + 2] = rgb[2];
+    pix[o + 3] = alpha;
+  }
+
+  render(ctx: RenderContext): void {
+    const { ctx: c, state, worldWidth, worldHeight } = ctx;
+    const cells = state.cells ?? [];
+    const { players, cols, rows } = state;
+    if (cells.length === 0) return;
+
+    const needFullRedraw = this.ensureCanvas(cols, rows);
+
+    if (needFullRedraw) {
+      // Повна перемальовка тільки при першому рендері або зміні розміру
+      for (let i = 0; i < cols * rows; i++) {
+        this.paintTile(i, cells, players, cols, rows);
+      }
+    } else {
+      // Інкрементальне оновлення — тільки змінені тайли + їх сусіди (як OpenFrontIO)
+      const changed = state.lastDeltaIndices;
+      if (changed && changed.length > 0) {
+        const toRepaint = new Set<number>();
+        for (const idx of changed) {
+          toRepaint.add(idx);
+          // Перемальовуємо сусідів бо їх статус кордону міг змінитись
+          const x = idx % cols,
+            y = Math.floor(idx / cols);
+          if (x > 0) toRepaint.add(idx - 1);
+          if (x < cols - 1) toRepaint.add(idx + 1);
+          if (y > 0) toRepaint.add(idx - cols);
+          if (y < rows - 1) toRepaint.add(idx + cols);
+        }
+        for (const i of toRepaint) {
+          this.paintTile(i, cells, players, cols, rows);
+        }
+      }
     }
 
     this.offscreenCtx!.putImageData(this.imageData!, 0, 0);
-
-    // Малюємо в ті самі world-координати, що й терен (worldWidth×worldHeight), щоб територія збігалась з кліком
     c.imageSmoothingEnabled = false;
     c.drawImage(
       this.offscreenCanvas!,
-      0, 0, cols, rows,
-      0, 0, worldWidth, worldHeight,
+      0,
+      0,
+      cols,
+      rows,
+      0,
+      0,
+      worldWidth,
+      worldHeight,
     );
   }
 }

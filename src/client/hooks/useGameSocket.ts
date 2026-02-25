@@ -98,6 +98,8 @@ export function useGameSocket(
           curr.players = msg.players ?? curr.players;
           curr.attacks = msg.attacks ?? curr.attacks;
           curr.tick = msg.tick ?? curr.tick;
+          // Зберігаємо індекси змінених тайлів для TerritoryLayer (інкрементальний рендер)
+          curr.lastDeltaIndices = delta.map(([idx]) => idx);
           if (curr.tick % UI_REFRESH_EVERY_TICKS === 0) {
             setUiSnapshot({ players: curr.players, tick: curr.tick });
           }
