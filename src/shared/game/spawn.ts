@@ -4,7 +4,8 @@
 
 import type { Cell, GameState, PlayerId } from '../types';
 import { GAME } from '../constants';
-import { recomputeScores } from './territory';
+import { tickChangedCells } from '../utils/cellChanges';
+import { initBorderSet } from '../utils/borderSetCache';
 
 function getSpawnCluster(center: number, cells: Cell[], cols: number, rows: number, size: number): number[] {
   if (cells[center]?.terrain !== 'land' || cells[center]?.ownerId !== null) return [];
@@ -28,19 +29,74 @@ function getSpawnCluster(center: number, cells: Cell[], cols: number, rows: numb
   return result;
 }
 
-export function spawnPlayer(state: GameState, playerId: PlayerId, tile: number): GameState {
-  const cell = state.cells[tile];
-  if (!cell || cell.terrain !== 'land' || cell.ownerId !== null) return state;
-  if (state.cells.some((c) => c.ownerId === playerId)) return state;
-  const clusterTiles = getSpawnCluster(tile, state.cells, state.cols, state.rows, GAME.SPAWN_CLUSTER_SIZE);
-  if (clusterTiles.length === 0) return state;
+/**
+ * allowRespawn=true — дозволяє змінити позицію спавну (лобі-фаза):
+ * спочатку очищає стару територію гравця, потім розміщує кластер у новому місці.
+ */
+export function spawnPlayer(state: GameState, playerId: PlayerId, tile: number, allowRespawn = false): GameState {
+  // O(1) перевірка через score замість O(n) cells.some()
+  const player = state.players[playerId];
+  const hasTerritory = (player?.score ?? 0) > 0;
+
+  if (hasTerritory && !allowRespawn) return state;
+
   const cells = state.cells.slice();
-  const next = { ...state, cells, players: { ...state.players } };
-  for (const t of clusterTiles) {
-    const cell = next.cells[t];
-    if (cell?.terrain === 'land') next.cells[t] = { ...cell, ownerId: playerId };
+  let clearedScore = 0;
+
+  // Лобі-ре-спавн: очищаємо стару позицію гравця
+  if (hasTerritory && allowRespawn) {
+    for (let i = 0; i < cells.length; i++) {
+      if (cells[i]?.ownerId === playerId) {
+        cells[i] = { ...cells[i]!, ownerId: null };
+        clearedScore++;
+      }
+    }
   }
-  const player = next.players[playerId];
-  if (player) next.players[playerId] = { ...player, troops: GAME.SPAWN_TROOPS };
-  return recomputeScores(next);
+
+  const targetCell = cells[tile];
+  if (!targetCell || targetCell.terrain !== 'land' || targetCell.ownerId !== null) {
+    if (hasTerritory && allowRespawn) {
+      // Скинули стару позицію — оновлюємо score інкрементально
+      const p = state.players[playerId];
+      if (p) {
+        return { ...state, cells, players: { ...state.players, [playerId]: { ...p, score: Math.max(0, p.score - clearedScore) } } };
+      }
+      return { ...state, cells };
+    }
+    return state;
+  }
+
+  const clusterTiles = getSpawnCluster(tile, cells, state.cols, state.rows, GAME.SPAWN_CLUSTER_SIZE);
+  if (clusterTiles.length === 0) {
+    if (hasTerritory && allowRespawn) {
+      const p = state.players[playerId];
+      if (p) {
+        return { ...state, cells, players: { ...state.players, [playerId]: { ...p, score: Math.max(0, p.score - clearedScore) } } };
+      }
+      return { ...state, cells };
+    }
+    return state;
+  }
+
+  const next = { ...state, cells, players: { ...state.players } };
+  let addedScore = 0;
+  for (const t of clusterTiles) {
+    const c = next.cells[t];
+    if (c?.terrain === 'land') {
+      next.cells[t] = { ...c, ownerId: playerId };
+      // Відстежуємо зміни для delta (щоб сервер відправив spawn-тайли клієнту)
+      tickChangedCells.push([t, playerId]);
+      addedScore++;
+    }
+  }
+
+  const p = next.players[playerId];
+  if (p) {
+    next.players[playerId] = { ...p, troops: GAME.SPAWN_TROOPS, score: Math.max(0, (p.score - clearedScore) + addedScore) };
+  }
+
+  // Ініціалізуємо live border set для гравця (як OpenFrontIO player.borderTiles())
+  initBorderSet(playerId, clusterTiles, next.cells, next.cols, next.rows);
+
+  return next;
 }

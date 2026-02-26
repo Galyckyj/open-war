@@ -12,5 +12,6 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    host: true, // слухає на 0.0.0.0 — доступно з телефону в локальній мережі
   },
 });

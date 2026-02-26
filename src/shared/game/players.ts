@@ -5,8 +5,9 @@
 import type { Cell, GameState, PlayerId } from '../types';
 import { GAME, MAP, PLAYER_COLORS } from '../constants';
 
-/** Якщо передано terrain (наприклад з карти світу), використовує його; інакше — процедурна генерація. */
-export function createInitialState(worldTerrain?: ReadonlyArray<'land' | 'water'>): GameState {
+/** Якщо передано terrain (наприклад з карти світу), використовує його; інакше — процедурна генерація.
+ * lobbyDurationMs > 0 → стартує у фазі 'lobby' з таймером підготовки. */
+export function createInitialState(worldTerrain?: ReadonlyArray<'land' | 'water'>, lobbyDurationMs = 0): GameState {
   const { COLS: cols, ROWS: rows } = MAP;
   const cells: Cell[] = [];
   const total = cols * rows;
@@ -33,16 +34,19 @@ export function createInitialState(worldTerrain?: ReadonlyArray<'land' | 'water'
     }
   }
 
-  return { phase: 'playing', players: {}, cells, attacks: [], cols, rows, tick: 0 };
+  const phase = lobbyDurationMs > 0 ? 'lobby' : 'playing';
+  const lobbyEndsAt = lobbyDurationMs > 0 ? Date.now() + lobbyDurationMs : undefined;
+  return { phase, lobbyEndsAt, players: {}, cells, attacks: [], cols, rows, tick: 0 };
 }
 
-export function addPlayer(state: GameState, playerId: PlayerId, name: string): GameState {
+export function addPlayer(state: GameState, playerId: PlayerId, name: string, overrideColor?: string): GameState {
   if (state.players[playerId]) return state;
   const next = { ...state, players: { ...state.players } };
-  const usedColors = new Set(Object.values(next.players).map((p) => p.color));
-  const color =
-    PLAYER_COLORS.find((c) => !usedColors.has(c)) ??
-    `hsl(${Math.round((Object.keys(next.players).length * 137.508) % 360)},70%,55%)`;
+  const color = overrideColor ?? (() => {
+    const usedColors = new Set(Object.values(next.players).map((p) => p.color));
+    return PLAYER_COLORS.find((c) => !usedColors.has(c)) ??
+      `hsl(${Math.round((Object.keys(next.players).length * 137.508) % 360)},70%,55%)`;
+  })();
   next.players[playerId] = { id: playerId, name, color, score: 0, troops: GAME.SPAWN_TROOPS };
   return next;
 }

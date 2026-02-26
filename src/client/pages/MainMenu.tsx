@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { generateUUID } from '../utils/uuid';
 import { useNavigate } from 'react-router-dom';
 import {
   IconSwords,
@@ -28,7 +29,7 @@ type Tab = 'play' | 'shop' | 'settings';
 function getPlayerId(): string {
   let id = localStorage.getItem('ow_player_id');
   if (!id) {
-    id = crypto.randomUUID();
+    id = generateUUID();
     localStorage.setItem('ow_player_id', id);
   }
   return id;

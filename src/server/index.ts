@@ -10,8 +10,11 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer } from 'node:http';
 import { createInitialState, updateGameState } from '../shared/gameLogic';
-import { GAME_PORT, TICK_MS } from '../shared/constants';
+import { GAME, GAME_PORT, TICK_MS } from '../shared/constants';
 import { loadWorldTerrain } from './loadWorldTerrain';
+import { makeBotInfos, initBots, tickBots, cleanupBots } from './bots';
+import { tickChangedCells } from '../shared/utils/cellChanges';
+import { clearBorderSetCache } from '../shared/utils/borderSetCache';
 import type { GameState, PlayerInput, RoomInfo, CellDelta } from '../shared/types';
 
 const PORT = Number(process.env['GAME_PORT']) || 3001;
@@ -42,10 +45,15 @@ function genId(): string {
 
 function createRoom(name?: string): Room {
   const id = genId();
+  // Початковий стан + боти як гравці
+  const botInfos = makeBotInfos(id);
+  const initialState = createInitialState(loadWorldTerrain() ?? undefined, GAME.LOBBY_DURATION_MS);
+  const stateWithBots = initBots(id, botInfos, initialState);
+
   const room: Room = {
     id,
     name: name?.trim() || `Кімната ${id}`,
-    state: createInitialState(loadWorldTerrain() ?? undefined),
+    state: stateWithBots,
     inputs: [],
     clients: new Set(),
     createdAt: Date.now(),
@@ -168,15 +176,33 @@ function computeCellDelta(prevCells: GameState['cells'], nextCells: GameState['c
 // ─── Tick loop ─────────────────────────────────────────────────────────────────
 
 function tick() {
-  for (const room of rooms.values()) {
-    const inputs = room.inputs.splice(0, room.inputs.length);
+  for (const [roomId, room] of rooms) {
+    // Очищуємо буфер змін на початку кожного тіку кімнати.
+    // І spawnPlayer, і tickAttacks додають сюди — server читає після updateGameState.
+    tickChangedCells.length = 0;
+
+    // Боти генерують inputs першими (перед гравцями)
+    const botInputs = tickBots(roomId, room.state);
+    const playerInputs = room.inputs.splice(0, room.inputs.length);
+    const inputs = [...botInputs, ...playerInputs];
     const prevState = room.state;
     room.state = updateGameState(room.state, inputs);
-    const delta = computeCellDelta(prevState.cells ?? [], room.state.cells ?? []);
+    // Delta стратегія:
+    //   'playing': tickChangedCells відслідковує атаки + спавни → O(changed).
+    //              cells.slice() більше не робиться в tickAttacks, тому prevState.cells
+    //              === room.state.cells і computeCellDelta завжди поверне [].
+    //   'lobby':   tickAttacks не викликається, tickChangedCells містить тільки спавни
+    //              (з spawnPlayer). computeCellDelta як fallback для решти.
+    const delta: CellDelta[] =
+      room.state.phase === 'playing'
+        ? (tickChangedCells as CellDelta[]).slice()
+        : computeCellDelta(prevState.cells ?? [], room.state.cells ?? []);
 
     const tickPayload = JSON.stringify({
       type: 'tick',
       tick: room.state.tick,
+      phase: room.state.phase,
+      lobbyEndsAt: room.state.lobbyEndsAt,
       delta,
       players: room.state.players,
       attacks: room.state.attacks ?? [],
@@ -196,6 +222,8 @@ setInterval(() => {
     const hasClients = room.clients.size > 0;
     if (!hasClients && now - room.lastActivity > 10 * 60 * 1000) {
       rooms.delete(id);
+      cleanupBots(id);
+      clearBorderSetCache();
       deleted = true;
     }
   }

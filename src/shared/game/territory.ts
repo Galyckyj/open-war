@@ -3,18 +3,25 @@
  */
 
 import type { Cell, GameState, PlayerId } from '../types';
-import { getNeighbors } from '../utils/math';
+import { getLandTileIndices } from '../utils/landCache';
 
 export function getBorderTiles(state: GameState, playerId: PlayerId): number[] {
   const { cells, cols, rows } = state;
+  // Використовуємо кеш суші: O(158k) замість O(500k)
+  const land = getLandTileIndices(cells);
   const out: number[] = [];
-  for (let i = 0; i < cells.length; i++) {
+  for (let li = 0; li < land.length; li++) {
+    const i = land[li]!;
     const c = cells[i];
-    if (!c || c.ownerId !== playerId || c.terrain !== 'land') continue;
-    if (getNeighbors(i, cols, rows).some((n) => {
-      const nc = cells[n];
-      return nc?.terrain === 'land' && nc.ownerId !== playerId;
-    })) out.push(i);
+    if (!c || c.ownerId !== playerId) continue;
+    const x = i % cols;
+    const y = (i / cols) | 0;
+    let isB = false;
+    if (!isB && x > 0)        { const n = cells[i-1];   isB = (n?.terrain === 'land' && n.ownerId !== playerId); }
+    if (!isB && x < cols - 1) { const n = cells[i+1];   isB = (n?.terrain === 'land' && n.ownerId !== playerId); }
+    if (!isB && y > 0)        { const n = cells[i-cols]; isB = (n?.terrain === 'land' && n.ownerId !== playerId); }
+    if (!isB && y < rows - 1) { const n = cells[i+cols]; isB = (n?.terrain === 'land' && n.ownerId !== playerId); }
+    if (isB) out.push(i);
   }
   return out;
 }

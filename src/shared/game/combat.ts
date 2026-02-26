@@ -5,7 +5,9 @@
 import type { Cell, GameState, PlayerId } from '../types';
 import { GAME } from '../constants';
 import { getNeighbors } from '../utils/math';
-import { getBorderTiles, getTerrainMag } from './territory';
+import { getBorderSetFor } from '../utils/borderSetCache';
+import { getLandTileIndices } from '../utils/landCache';
+import { getTerrainMag } from './territory';
 
 export function getAttackCost(state: GameState, targetId: PlayerId | null): number {
   if (!targetId) return GAME.TROOP_COST_NEUTRAL;
@@ -77,13 +79,47 @@ export function launchAttack(
   if (targetId === attackerId) return state;
 
   const cells = state.cells ?? [];
-  const borderTiles = getBorderTiles(state, attackerId);
-  const hasBorder = borderTiles.some((tile) =>
-    getNeighbors(tile, state.cols, state.rows).some((n) => {
-      const owner = cells[n]?.ownerId ?? null;
-      return (targetId === null ? owner === null : owner === targetId) && cells[n]?.terrain === 'land';
-    }),
-  );
+  const cols = state.cols;
+  const rows = state.rows;
+
+  // ОПТИМІЗАЦІЯ: замість getBorderTiles O(158k) → border set O(border_size) з ранній виходом.
+  // Як OpenFrontIO: перевіряємо тільки border tiles гравця, не всю карту.
+  let hasBorder = false;
+  const borderSet = getBorderSetFor(attackerId);
+  if (borderSet.size > 0) {
+    // Швидкий шлях: є live border set
+    BORDER_CHECK: for (const tile of borderSet) {
+      for (const n of getNeighbors(tile, cols, rows)) {
+        const nc = cells[n];
+        if (!nc || nc.terrain !== 'land') continue;
+        const owner = nc.ownerId ?? null;
+        if (targetId === null ? owner === null : owner === targetId) {
+          hasBorder = true;
+          break BORDER_CHECK;
+        }
+      }
+    }
+  } else {
+    // Fallback: border set ще не ініціалізований — O(158k/score) з раннім виходом
+    const land = getLandTileIndices(cells);
+    LAND_CHECK: for (let li = 0; li < land.length; li++) {
+      const i = land[li]!;
+      if (cells[i]?.ownerId !== attackerId) continue;
+      const x = i % cols;
+      const y = (i / cols) | 0;
+      const ns = [x > 0 ? i-1 : -1, x < cols-1 ? i+1 : -1, y > 0 ? i-cols : -1, y < rows-1 ? i+cols : -1] as const;
+      for (const n of ns) {
+        if (n < 0) continue;
+        const nc = cells[n];
+        if (!nc || nc.terrain !== 'land') continue;
+        const owner = nc.ownerId ?? null;
+        if (targetId === null ? owner === null : owner === targetId) {
+          hasBorder = true;
+          break LAND_CHECK;
+        }
+      }
+    }
+  }
   if (!hasBorder) return state;
 
   let actualSend = send;

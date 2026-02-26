@@ -7,6 +7,7 @@ export const TICK_MS = 50;
 export const TICKS_PER_SEC = 1000 / TICK_MS;
 
 export const GAME = {
+  LOBBY_DURATION_MS: 10_000,  // 10 секунд підготовки перед стартом
   SPAWN_TROOPS: 500,
   SPAWN_CLUSTER_SIZE: 30,
   MAX_TROOPS: 999_999,

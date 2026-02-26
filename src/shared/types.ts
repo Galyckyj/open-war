@@ -38,6 +38,8 @@ export type GamePhase = 'lobby' | 'playing' | 'finished';
 
 export interface GameState {
   phase: GamePhase;
+  /** Unix-мітка (ms) коли закінчується лобі-фаза (лише у phase='lobby'). */
+  lobbyEndsAt?: number;
   players: Record<PlayerId, Player>;
   cells: Cell[];
   attacks: Attack[];

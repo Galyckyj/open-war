@@ -5,6 +5,7 @@
 
 import type { GameState } from "../../shared/types";
 import type { Layer, RenderContext, Viewport } from "./types";
+import { perfStats } from "../utils/perfStats";
 
 export class GameRenderer {
   private ctx: CanvasRenderingContext2D;
@@ -91,6 +92,8 @@ export class GameRenderer {
   }
 
   render(state: GameState | null): void {
+    const _t0 = performance.now();
+
     this.ctx.save();
     this.ctx.scale(this.dpr, this.dpr);
     this.ctx.fillStyle = "#060d14";
@@ -129,5 +132,7 @@ export class GameRenderer {
 
     this.ctx.restore(); // view (scale + translate)
     this.ctx.restore(); // dpr
+
+    perfStats.renderMs = performance.now() - _t0;
   }
 }

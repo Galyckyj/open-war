@@ -1,59 +1,18 @@
 /**
- * Шар UI поверх карти: нікнейми та війська по центру території.
+ * Шар UI поверх карти: нікнейм + кількість військ по центру кожної території.
+ *
+ * Текст розміщується у центрі НАЙБІЛЬШОЇ суцільної зони гравця (BFS),
+ * а не по центроїду всіх клітин — правильно при розбитих/острівних територіях.
  */
 
-import { MAP } from '../../../shared/constants';
 import type { Layer, RenderContext } from '../types';
 
-const COLS = MAP.COLS;
-const ROWS = MAP.ROWS;
-
-function getTerritoryBounds(
-  cells: { ownerId: string | null }[],
-  playerId: string,
-  cols: number,
-  rows: number,
-): { minCol: number; maxCol: number; minRow: number; maxRow: number } | null {
-  let minCol = cols,
-    maxCol = 0,
-    minRow = rows,
-    maxRow = 0;
-  let found = false;
-  for (let i = 0; i < cells.length; i++) {
-    if (cells[i]?.ownerId !== playerId) continue;
-    found = true;
-    const c = i % cols;
-    const r = Math.floor(i / cols);
-    if (c < minCol) minCol = c;
-    if (c > maxCol) maxCol = c;
-    if (r < minRow) minRow = r;
-    if (r > maxRow) maxRow = r;
-  }
-  if (!found) return null;
-  return { minCol, maxCol, minRow, maxRow };
-}
-
-function getTerritoryCenter(
-  bounds: { minCol: number; maxCol: number; minRow: number; maxRow: number },
-  cellW: number,
-  cellH: number,
-): { cx: number; cy: number; width: number; height: number } {
-  const cx = (bounds.minCol + bounds.maxCol + 1) * 0.5 * cellW;
-  const cy = (bounds.minRow + bounds.maxRow + 1) * 0.5 * cellH;
-  const width = (bounds.maxCol - bounds.minCol + 1) * cellW;
-  const height = (bounds.maxRow - bounds.minRow + 1) * cellH;
-  return { cx, cy, width, height };
-}
-
-function nameFontSizeFromTerritory(
-  width: number,
-  height: number,
-  nameLength: number,
-): number {
-  const widthConstrained = (width / Math.max(1, nameLength)) * 2;
-  const heightConstrained = height / 3;
-  return Math.min(widthConstrained, heightConstrained);
-}
+type Bounds = {
+  minCol: number; maxCol: number;
+  minRow: number; maxRow: number;
+  count: number;
+  textCol: number; textRow: number;
+};
 
 function formatTroops(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -63,57 +22,180 @@ function formatTroops(n: number): string {
 
 export class UILayer implements Layer {
   visible = true;
+  private boundsCache = new Map<string, Bounds>();
+  private lastTick = -1;
+
+  /**
+   * BFS по всіх клітинах — знаходимо найбільшу суцільну зону кожного гравця.
+   * Виконується лише при зміні state.tick.
+   */
+  private rebuildBounds(
+    cells: RenderContext['state']['cells'],
+    cols: number,
+    rows: number,
+  ): void {
+    this.boundsCache.clear();
+
+    const n = cells.length;
+    // -1 = не відвідано; >=0 = індекс компоненти
+    const visited = new Int32Array(n).fill(-1);
+
+    interface Component {
+      ownerId: string;
+      size: number;
+      sumCol: number; sumRow: number;
+      minCol: number; maxCol: number;
+      minRow: number; maxRow: number;
+    }
+
+    const components: Component[] = [];
+    const queue: number[] = [];
+
+    for (let i = 0; i < n; i++) {
+      if (visited[i] !== -1) continue;
+      const cell = cells[i];
+      if (!cell || cell.terrain !== 'land' || !cell.ownerId) continue;
+
+      const ownerId = cell.ownerId;
+      const cmpIdx = components.length;
+      const cmp: Component = {
+        ownerId,
+        size: 0,
+        sumCol: 0, sumRow: 0,
+        minCol: cols, maxCol: 0,
+        minRow: rows, maxRow: 0,
+      };
+      components.push(cmp);
+
+      let head = 0;
+      queue.length = 0;
+      queue.push(i);
+      visited[i] = cmpIdx;
+
+      while (head < queue.length) {
+        const idx = queue[head++]!;
+        const col = idx % cols;
+        const row = (idx / cols) | 0;
+
+        cmp.size++;
+        cmp.sumCol += col;
+        cmp.sumRow += row;
+        if (col < cmp.minCol) cmp.minCol = col;
+        if (col > cmp.maxCol) cmp.maxCol = col;
+        if (row < cmp.minRow) cmp.minRow = row;
+        if (row > cmp.maxRow) cmp.maxRow = row;
+
+        // 4 сусіди
+        if (col > 0)        { const nb = idx - 1;    if (visited[nb] === -1 && cells[nb]?.ownerId === ownerId) { visited[nb] = cmpIdx; queue.push(nb); } }
+        if (col < cols - 1) { const nb = idx + 1;    if (visited[nb] === -1 && cells[nb]?.ownerId === ownerId) { visited[nb] = cmpIdx; queue.push(nb); } }
+        if (row > 0)        { const nb = idx - cols;  if (visited[nb] === -1 && cells[nb]?.ownerId === ownerId) { visited[nb] = cmpIdx; queue.push(nb); } }
+        if (row < rows - 1) { const nb = idx + cols;  if (visited[nb] === -1 && cells[nb]?.ownerId === ownerId) { visited[nb] = cmpIdx; queue.push(nb); } }
+      }
+    }
+
+    // Для кожного гравця — лишаємо лише найбільшу компоненту
+    const bestCmp = new Map<string, { size: number; cmpIdx: number }>();
+    for (let ci = 0; ci < components.length; ci++) {
+      const cmp = components[ci]!;
+      const cur = bestCmp.get(cmp.ownerId);
+      if (!cur || cmp.size > cur.size) bestCmp.set(cmp.ownerId, { size: cmp.size, cmpIdx: ci });
+    }
+
+    // Snap: найближча клітина компоненти до центроїду зони
+    for (const [pid, { cmpIdx }] of bestCmp) {
+      const cmp = components[cmpIdx]!;
+      const cxT = cmp.sumCol / cmp.size;
+      const cyT = cmp.sumRow / cmp.size;
+      let bestDist = Infinity;
+      let textCol = (cxT | 0);
+      let textRow = (cyT | 0);
+
+      for (let row = cmp.minRow; row <= cmp.maxRow; row++) {
+        for (let col = cmp.minCol; col <= cmp.maxCol; col++) {
+          if (visited[row * cols + col] !== cmpIdx) continue;
+          const dr = row - cyT;
+          const dc = col - cxT;
+          const dist = dr * dr + dc * dc;
+          if (dist < bestDist) { bestDist = dist; textCol = col; textRow = row; }
+        }
+      }
+
+      this.boundsCache.set(pid, {
+        minCol: cmp.minCol, maxCol: cmp.maxCol,
+        minRow: cmp.minRow, maxRow: cmp.maxRow,
+        count: cmp.size,
+        textCol, textRow,
+      });
+    }
+  }
 
   render(ctx: RenderContext): void {
-    const { ctx: c, state, playerId, worldWidth, worldHeight } = ctx;
+    const { ctx: c, state, playerId, worldWidth, worldHeight, scale } = ctx;
     const cells = state.cells ?? [];
-    const { players, cols, rows } = state;
-    const cellW = worldWidth / COLS;
-    const cellH = worldHeight / ROWS;
+    const { players, cols, rows, tick } = state;
+    if (cells.length === 0) return;
+
+    if (tick !== this.lastTick) {
+      this.rebuildBounds(cells, cols, rows);
+      this.lastTick = tick;
+    }
+
+    const cellW = worldWidth / cols;
+    const cellH = worldHeight / rows;
 
     for (const [pid, player] of Object.entries(players)) {
       if (player.score === 0) continue;
-      const bounds = getTerritoryBounds(cells, pid, cols, rows);
-      if (!bounds) continue;
-      const { cx, cy, width, height } = getTerritoryCenter(bounds, cellW, cellH);
+      const b = this.boundsCache.get(pid);
+      if (!b) continue;
+
+      // Розмір bounding box на екрані — для відсічення дрібних територій
+      const terrWScreen = (b.maxCol - b.minCol + 1) * cellW * scale;
+      const terrHScreen = (b.maxRow - b.minRow + 1) * cellH * scale;
+      const terrScreen = Math.min(terrWScreen, terrHScreen);
+      // Не малюємо текст якщо територія дуже маленька на екрані
+      if (terrScreen < 18) continue;
+
+      // Найближча власна клітина до центроїду — завжди на реальній частині території
+      const cx = (b.textCol + 0.5) * cellW;
+      const cy = (b.textRow + 0.5) * cellH;
+
+      const isSelf = pid === playerId;
+
+      // Screen-space розмір: читабельний при будь-якому зумі
+      // Росте разом із розміром території, але затиснутий між мін і макс
+      const namePxScreen = Math.max(10, Math.min(20, terrScreen * 0.13));
+      const troopPxScreen = namePxScreen * 0.78;
+
+      // Конвертуємо в world-units щоб рендерити в трансформованому контексті
+      const nameWU = namePxScreen / scale;
+      const troopWU = troopPxScreen / scale;
 
       const name = player.name || 'Гравець';
-      const rawNameSize = nameFontSizeFromTerritory(width, height, name.length);
-      const nameFontSize = Math.max(cellW * 0.6, Math.min(rawNameSize, cellW * 4));
-      const scoreScale = Math.min(2, 0.6 + Math.sqrt(player.score) * 0.04);
-      const troopFontSize = Math.max(
-        cellW * 1.2,
-        Math.min(cellW * 1.8 * scoreScale, cellW * 6),
-      );
+      const troopLabel = formatTroops(player.troops);
+      const gap = nameWU * 0.85; // відступ між рядками
 
-      c.save();
-      c.globalAlpha = 0.8;
-      c.font = `${pid === playerId ? 'bold ' : ''}${nameFontSize}px sans-serif`;
-      c.fillStyle = pid === playerId ? '#ffffff' : '#e0e0e0';
       c.textAlign = 'center';
       c.textBaseline = 'middle';
-      c.fillText(name, cx, cy);
+
+      // ── Нікнейм (трохи приглушений) ──────────────────────────────────────
+      c.save();
+      c.globalAlpha = isSelf ? 0.9 : 0.78;
+      c.font = `${isSelf ? 'bold ' : ''}${nameWU}px sans-serif`;
+      c.fillStyle = isSelf ? '#ffffff' : '#dde3e8';
+      c.shadowColor = 'rgba(0,0,0,0.7)';
+      c.shadowBlur = nameWU * 0.4;
+      c.fillText(name, cx, cy - gap * 0.5);
       c.restore();
 
-      if (player.troops >= 1) {
-        const label = formatTroops(player.troops);
-        const troopOffsetY = nameFontSize * 0.55;
-        const ty = cy + troopOffsetY;
-        const charW = troopFontSize * 0.55;
-        const bw = label.length * charW + troopFontSize * 0.6;
-        const bh = troopFontSize * 1.1;
-
+      // ── Кількість військ (яскрава, головна) ──────────────────────────────
+      if (player.troops >= 1 && terrScreen > 28) {
         c.save();
-        c.fillStyle = 'rgba(0,0,0,0.5)';
-        const r = bh * 0.25;
-        c.beginPath();
-        c.roundRect(cx - bw / 2, ty - bh / 2, bw, bh, r);
-        c.fill();
-        c.font = `${pid === playerId ? 'bold ' : ''}${troopFontSize}px sans-serif`;
-        c.fillStyle = pid === playerId ? '#ffffff' : '#dddddd';
-        c.textAlign = 'center';
-        c.textBaseline = 'middle';
-        c.fillText(label, cx, ty);
+        c.globalAlpha = isSelf ? 1 : 0.95;
+        c.font = `bold ${troopWU}px sans-serif`;
+        c.fillStyle = isSelf ? '#fde68a' : '#ffffff';
+        c.shadowColor = 'rgba(0,0,0,0.8)';
+        c.shadowBlur = troopWU * 0.5;
+        c.fillText(troopLabel, cx, cy + gap * 0.7);
         c.restore();
       }
     }

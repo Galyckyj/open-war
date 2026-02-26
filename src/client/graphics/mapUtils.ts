@@ -3,7 +3,6 @@
  */
 
 import type { GameState } from "../../shared/types";
-import { getNeighbors } from "../../shared/gameLogic";
 
 const colorCache = new Map<string, string>();
 function parseColor(s: string): string {
@@ -48,14 +47,20 @@ export function isBorderTile(
   cols: number,
   rows: number,
 ): boolean {
-  // Кордон якщо хоча б один сусід: вода, межа карти, або суша з іншим власником
-  const neighbors = getNeighbors(index, cols, rows);
-  // Якщо сусідів менше 4 — клітинка на краю карти → кордон
-  if (neighbors.length < 4) return true;
-  return neighbors.some((n) => {
-    const nc = cells[n];
-    return !nc || nc.terrain === "water" || (nc.terrain === "land" && nc.ownerId !== ownerId);
-  });
+  const x = index % cols;
+  const y = (index / cols) | 0;
+  // Межа карти → завжди кордон
+  if (x === 0 || x === cols - 1 || y === 0 || y === rows - 1) return true;
+  // Inline перевірка 4 сусідів без алокації масиву
+  let nc = cells[index - 1];
+  if (!nc || nc.terrain === "water" || (nc.terrain === "land" && nc.ownerId !== ownerId)) return true;
+  nc = cells[index + 1];
+  if (!nc || nc.terrain === "water" || (nc.terrain === "land" && nc.ownerId !== ownerId)) return true;
+  nc = cells[index - cols];
+  if (!nc || nc.terrain === "water" || (nc.terrain === "land" && nc.ownerId !== ownerId)) return true;
+  nc = cells[index + cols];
+  if (!nc || nc.terrain === "water" || (nc.terrain === "land" && nc.ownerId !== ownerId)) return true;
+  return false;
 }
 
 /** Темніший колір для кордону, як у OpenFrontIO (darken 12.5%). */

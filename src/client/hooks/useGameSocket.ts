@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import type { GameState, CellDelta } from "../../shared/types";
+import type { GamePhase, GameState, CellDelta } from "../../shared/types";
 import { GAME_PORT } from "../../shared/constants";
+import { perfStats } from "../utils/perfStats";
 
 const WS_URL =
   typeof location !== "undefined"
@@ -10,12 +11,20 @@ const WS_URL =
 /** Як часто оновлювати UI (Leaderboard) — лише лёгкий snapshot, без cells. */
 const UI_REFRESH_EVERY_TICKS = 10;
 
-export type GameUISnapshot = { players: GameState["players"]; tick: number };
+export type GameUISnapshot = {
+  players: GameState["players"];
+  attacks: GameState["attacks"];
+  tick: number;
+  phase: GamePhase;
+  lobbyEndsAt?: number;
+};
 
 export type SocketStats = { bytesIn: number; bytesOut: number };
 
+// Реєстр TextEncoder: не створювати новий при кожному повідомленні
+const _encoder = new TextEncoder();
 function byteLength(s: string): number {
-  return new TextEncoder().encode(s).length;
+  return _encoder.encode(s).byteLength;
 }
 
 export function useGameSocket(
@@ -75,19 +84,26 @@ export function useGameSocket(
           type: string;
           payload?: GameState;
           tick?: number;
+          phase?: GamePhase;
+          lobbyEndsAt?: number;
           delta?: CellDelta[];
           players?: GameState["players"];
           attacks?: GameState["attacks"];
         };
         if (msg.type === "state" && msg.payload) {
           stateRef.current = msg.payload;
-          setUiSnapshot({
+          const snap: GameUISnapshot = {
             players: msg.payload.players,
+            attacks: msg.payload.attacks,
             tick: msg.payload.tick,
-          });
+            phase: msg.payload.phase,
+          };
+          if (msg.payload.lobbyEndsAt !== undefined) snap.lobbyEndsAt = msg.payload.lobbyEndsAt;
+          setUiSnapshot(snap);
           return;
         }
         if (msg.type === "tick" && typeof msg.tick === "number") {
+          const _wsT0 = performance.now();
           const curr = stateRef.current;
           if (!curr?.cells) return;
           const delta = msg.delta ?? [];
@@ -98,14 +114,25 @@ export function useGameSocket(
           curr.players = msg.players ?? curr.players;
           curr.attacks = msg.attacks ?? curr.attacks;
           curr.tick = msg.tick ?? curr.tick;
+          if (msg.phase) curr.phase = msg.phase;
+          if (msg.lobbyEndsAt !== undefined) curr.lobbyEndsAt = msg.lobbyEndsAt;
           // Акумулюємо індекси змінених тайлів — між двома кадрами може прийти кілька тіків,
           // тому конкатенуємо, а не перезаписуємо. TerritoryLayer очищає після рендеру.
           const incoming = delta.map(([idx]) => idx);
           curr.lastDeltaIndices = curr.lastDeltaIndices
             ? curr.lastDeltaIndices.concat(incoming)
             : incoming;
+          perfStats.wsDeltaSize = delta.length;
+          perfStats.wsProcessMs = performance.now() - _wsT0;
           if (curr.tick % UI_REFRESH_EVERY_TICKS === 0) {
-            setUiSnapshot({ players: curr.players, tick: curr.tick });
+            const snap: GameUISnapshot = {
+              players: curr.players,
+              attacks: curr.attacks,
+              tick: curr.tick,
+              phase: curr.phase,
+            };
+            if (curr.lobbyEndsAt !== undefined) snap.lobbyEndsAt = curr.lobbyEndsAt;
+            setUiSnapshot(snap);
           }
         }
       } catch {
