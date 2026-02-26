@@ -14,8 +14,22 @@ export function getAttackCost(state: GameState, targetId: PlayerId | null): numb
   return Math.max(GAME.TROOP_COST_NEUTRAL, Math.floor((target.troops / target.score) * GAME.ATTACK_COST_MULTIPLIER));
 }
 
-export function getSpeedFactor(state: GameState, attackerId: PlayerId, targetId: PlayerId | null): number {
-  if (!targetId) return 1;
+/**
+ * Швидкість захоплення тайлів на тік.
+ * Нейтральна: sqrt(troops / DIV) — burst на початку, природний спад у міру витрат.
+ * Проти гравця: логарифмічна крива від співвідношення сил (як раніше).
+ */
+export function getSpeedFactor(
+  state: GameState,
+  attackerId: PlayerId,
+  targetId: PlayerId | null,
+  attackTroops: number = 0,
+): number {
+  if (!targetId) {
+    // Більше військ → швидший старт; по мірі витрат troops зменшується → сповільнення
+    const raw = Math.sqrt(Math.max(1, attackTroops / GAME.NEUTRAL_SPEED_TROOP_DIV));
+    return Math.min(GAME.NEUTRAL_SPEED_MAX, Math.max(1, raw));
+  }
   const attacker = state.players[attackerId];
   const target = state.players[targetId];
   if (!attacker || !target || target.score < 1 || target.troops < 1) return 1;

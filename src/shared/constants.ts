@@ -16,6 +16,10 @@ export const GAME = {
   ATTACK_COST_MULTIPLIER: 2,
   DEFENSE_COST_DIVISOR: 1.7,
   SPEED_FACTOR_BASE: 0.325,
+  // Нейтральна територія: швидкість = sqrt(troops / DIV), max MAX тайлів/тік
+  // Більше військ → burst на старті → спадає природно по мірі витрат
+  NEUTRAL_SPEED_TROOP_DIV: 6,
+  NEUTRAL_SPEED_MAX: 10,
   INCOME_DIVISOR: 40,
   INCOME_BASE: 0.5,
   TROOPS_CAP_PER_TILE: 50,

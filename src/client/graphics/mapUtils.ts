@@ -48,10 +48,13 @@ export function isBorderTile(
   cols: number,
   rows: number,
 ): boolean {
-  return getNeighbors(index, cols, rows).some((n) => {
+  // Кордон якщо хоча б один сусід: вода, межа карти, або суша з іншим власником
+  const neighbors = getNeighbors(index, cols, rows);
+  // Якщо сусідів менше 4 — клітинка на краю карти → кордон
+  if (neighbors.length < 4) return true;
+  return neighbors.some((n) => {
     const nc = cells[n];
-    // Кордон тільки де сусід є суша з іншим власником
-    return nc?.terrain === "land" && nc.ownerId !== ownerId;
+    return !nc || nc.terrain === "water" || (nc.terrain === "land" && nc.ownerId !== ownerId);
   });
 }
 

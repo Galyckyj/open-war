@@ -56,10 +56,12 @@ export function tickAttacks(state: GameState): GameState {
 
     const attackCost = getAttackCost(state, attack.targetId);
     const defenseCost = getDefenseCost(attackCost);
+    // Передаємо поточну кількість військ: для нейтральних це дає burst/decay
     const speedFactor = getSpeedFactor(
       state,
       attack.attackerId,
       attack.targetId,
+      troops,
     );
     const numTilesPerTick = Math.max(1, Math.ceil(speedFactor));
     const targetOwner = attack.targetId ?? null;

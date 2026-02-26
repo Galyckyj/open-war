@@ -116,19 +116,34 @@ export class TerritoryLayer implements Layer {
         this.paintTile(i, cells, players, cols, rows);
       }
     } else if (changed.length > 0) {
-      // Інкрементальне оновлення після тіку: оновлюємо imageData тільки для змінених тайлів + 4 сусіди (кордон сусідів теж міняється)
+      // Інкрементальне оновлення після тіку: змінені тайли + сусіди + сусіди сусідів (2 хопи).
+      // 2 хопи потрібні бо isBorderTile залежить від сусідів — при швидкому просуванні
+      // (багато тайлів/тік) "старий кордон" може бути на відстані 2 від найближчого delta-тайлу.
       const toRepaint = new Set<number>(changed);
       for (const idx of changed) {
         const x = idx % cols;
         const y = Math.floor(idx / cols);
-        if (x > 0) toRepaint.add(idx - 1);
+        // 1-хоп (прямі сусіди)
+        if (x > 0)        toRepaint.add(idx - 1);
         if (x < cols - 1) toRepaint.add(idx + 1);
-        if (y > 0) toRepaint.add(idx - cols);
+        if (y > 0)        toRepaint.add(idx - cols);
+        if (y < rows - 1) toRepaint.add(idx + cols);
+      }
+      // 2-хоп: сусіди всіх 1-хоп тайлів (щоб не лишалось артефактів кордону)
+      const firstHop = Array.from(toRepaint);
+      for (const idx of firstHop) {
+        const x = idx % cols;
+        const y = Math.floor(idx / cols);
+        if (x > 0)        toRepaint.add(idx - 1);
+        if (x < cols - 1) toRepaint.add(idx + 1);
+        if (y > 0)        toRepaint.add(idx - cols);
         if (y < rows - 1) toRepaint.add(idx + cols);
       }
       for (const i of toRepaint) {
         this.paintTile(i, cells, players, cols, rows);
       }
+      // Очищаємо буфер після рендеру — наступний тік додасть нові індекси поверх порожнього
+      state.lastDeltaIndices = [];
     }
 
     this.offscreenCtx!.putImageData(this.imageData!, 0, 0);
