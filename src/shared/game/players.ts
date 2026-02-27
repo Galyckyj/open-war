@@ -36,7 +36,7 @@ export function createInitialState(worldTerrain?: ReadonlyArray<'land' | 'water'
 
   const phase = lobbyDurationMs > 0 ? 'lobby' : 'playing';
   const lobbyEndsAt = lobbyDurationMs > 0 ? Date.now() + lobbyDurationMs : undefined;
-  return { phase, lobbyEndsAt, players: {}, cells, attacks: [], cols, rows, tick: 0 };
+  return { phase, lobbyEndsAt, players: {}, cells, attacks: [], buildings: [], cols, rows, tick: 0 };
 }
 
 export function addPlayer(state: GameState, playerId: PlayerId, name: string, overrideColor?: string): GameState {

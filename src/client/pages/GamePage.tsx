@@ -181,7 +181,7 @@ export function GamePage() {
   const [selectedBuilding, setSelectedBuilding] = useState<BuildingId>(null);
   const [hasSpawnedInLobby, setHasSpawnedInLobby] = useState(false);
 
-  const { stateRef, statsRef, uiSnapshot, connected, sendSpawn, sendAttack } =
+  const { stateRef, statsRef, uiSnapshot, connected, sendSpawn, sendAttack, sendBuild, sendDemolish } =
     useGameSocket(playerId, nickname, roomId);
 
   const cameraRef = useRef<GameCameraHandle>(null);
@@ -218,6 +218,17 @@ export function GamePage() {
     if (st.phase === 'lobby') {
       sendSpawn(tile);
       setHasSpawnedInLobby(true);
+      return;
+    }
+
+    // ── Режим будівництва: клік на своїй клітині ─────────────────────────────
+    if (selectedBuilding && cell.ownerId === playerId) {
+      const existing = stateRef.current?.buildings.find((b) => b.tileIndex === tile && b.ownerId === playerId);
+      if (existing) {
+        sendDemolish(tile);
+      } else {
+        sendBuild(tile, selectedBuilding);
+      }
       return;
     }
 

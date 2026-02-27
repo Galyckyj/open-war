@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { GamePhase, GameState, CellDelta } from "../../shared/types";
+import type { GamePhase, GameState, CellDelta, BuildingType } from "../../shared/types";
 import { GAME_PORT } from "../../shared/constants";
 import { perfStats } from "../utils/perfStats";
 
@@ -89,6 +89,7 @@ export function useGameSocket(
           delta?: CellDelta[];
           players?: GameState["players"];
           attacks?: GameState["attacks"];
+          buildings?: GameState["buildings"];
         };
         if (msg.type === "state" && msg.payload) {
           stateRef.current = msg.payload;
@@ -113,6 +114,7 @@ export function useGameSocket(
           }
           curr.players = msg.players ?? curr.players;
           curr.attacks = msg.attacks ?? curr.attacks;
+          curr.buildings = msg.buildings ?? curr.buildings;
           curr.tick = msg.tick ?? curr.tick;
           if (msg.phase) curr.phase = msg.phase;
           if (msg.lobbyEndsAt !== undefined) curr.lobbyEndsAt = msg.lobbyEndsAt;
@@ -180,5 +182,27 @@ export function useGameSocket(
     wsRef.current.send(payload);
   };
 
-  return { stateRef, statsRef, uiSnapshot, connected, sendSpawn, sendAttack };
+  const sendBuild = (tile: number, buildingType: BuildingType) => {
+    if (!playerId || wsRef.current?.readyState !== WebSocket.OPEN) return;
+    const payload = JSON.stringify({
+      type: "input",
+      playerId,
+      payload: { type: "build", tile, buildingType },
+    });
+    statsRef.current.bytesOut += byteLength(payload);
+    wsRef.current.send(payload);
+  };
+
+  const sendDemolish = (tile: number) => {
+    if (!playerId || wsRef.current?.readyState !== WebSocket.OPEN) return;
+    const payload = JSON.stringify({
+      type: "input",
+      playerId,
+      payload: { type: "demolish", tile },
+    });
+    statsRef.current.bytesOut += byteLength(payload);
+    wsRef.current.send(payload);
+  };
+
+  return { stateRef, statsRef, uiSnapshot, connected, sendSpawn, sendAttack, sendBuild, sendDemolish };
 }

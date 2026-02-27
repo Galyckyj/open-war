@@ -34,6 +34,25 @@ export interface Attack {
   troops: number;
 }
 
+export type BuildingType = 'port' | 'fortress' | 'farm' | 'barracks';
+
+export const BUILDING_CONSTRUCTION_TICKS: Record<BuildingType, number> = {
+  port:     50,
+  fortress: 60,
+  farm:     40,
+  barracks: 55,
+};
+
+export interface Building {
+  id: string;
+  type: BuildingType;
+  ownerId: PlayerId;
+  tileIndex: number;
+  /** true — ще будується, false — активна */
+  underConstruction: boolean;
+  constructionTicksLeft: number;
+}
+
 export type GamePhase = 'lobby' | 'playing' | 'finished';
 
 export interface GameState {
@@ -43,6 +62,7 @@ export interface GameState {
   players: Record<PlayerId, Player>;
   cells: Cell[];
   attacks: Attack[];
+  buildings: Building[];
   cols: number;
   rows: number;
   tick: number;
@@ -52,12 +72,13 @@ export interface GameState {
 export type CellDelta = [number, PlayerId | null];
 
 export interface PlayerInput {
-  type: 'spawn' | 'attack' | 'join';
+  type: 'spawn' | 'attack' | 'join' | 'build' | 'demolish';
   playerId: PlayerId;
   payload?: {
     tile?: number;
     targetId?: string | null;
     troops?: number;
     name?: string;
+    buildingType?: BuildingType;
   };
 }

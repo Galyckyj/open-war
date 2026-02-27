@@ -206,6 +206,7 @@ function tick() {
       delta,
       players: room.state.players,
       attacks: room.state.attacks ?? [],
+      buildings: room.state.buildings ?? [],
     });
     for (const ws of room.clients) {
       if (ws.readyState === 1) ws.send(tickPayload);

@@ -9,6 +9,7 @@ import { spawnPlayer } from './game/spawn';
 import { launchAttack } from './game/combat';
 import { tickAttacks } from './game/attackExecution';
 import { tickTroopGeneration } from './game/income';
+import { placeBuilding, demolishBuilding, tickBuildings } from './game/buildings';
 
 export { createInitialState, addPlayer } from './game/players';
 export { spawnPlayer } from './game/spawn';
@@ -24,7 +25,7 @@ export function updateGameState(state: GameState, inputs: PlayerInput[]): GameSt
   // Під час лобі — лише реєстрація та спавн, без бою
   let next: GameState = inLobby
     ? state
-    : tickTroopGeneration(tickAttacks(state));
+    : tickTroopGeneration(tickBuildings(tickAttacks(state)));
 
   // Лобі закінчилось → переходимо в playing
   if (state.phase === 'lobby' && !inLobby) {
@@ -35,11 +36,14 @@ export function updateGameState(state: GameState, inputs: PlayerInput[]): GameSt
     if (input.type === 'join' && input.payload?.name) {
       next = addPlayer(next, input.playerId, input.payload.name);
     } else if (input.type === 'spawn' && input.payload?.tile !== undefined) {
-      // Під час лобі дозволяємо змінити позицію спавну
       next = spawnPlayer(next, input.playerId, input.payload.tile, inLobby);
     } else if (input.type === 'attack' && !inLobby) {
       const targetId = input.payload?.targetId !== undefined ? input.payload.targetId : undefined;
       if (targetId !== undefined) next = launchAttack(next, input.playerId, targetId, input.payload?.troops);
+    } else if (input.type === 'build' && !inLobby && input.payload?.tile !== undefined && input.payload?.buildingType) {
+      next = placeBuilding(next, input.playerId, input.payload.tile, input.payload.buildingType);
+    } else if (input.type === 'demolish' && !inLobby && input.payload?.tile !== undefined) {
+      next = demolishBuilding(next, input.playerId, input.payload.tile);
     }
   }
   return { ...next, tick: next.tick + 1 };

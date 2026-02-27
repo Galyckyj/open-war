@@ -11,6 +11,7 @@ import {
   TerrainLayer,
   TerritoryLayer,
   UILayer,
+  BuildingLayer,
 } from "../graphics";
 import { loadMapDataFromPath } from "../mapLoader";
 
@@ -104,6 +105,7 @@ export const GameCanvas = forwardRef<GameCameraHandle, GameCanvasProps>(function
     renderer.setPlayerId(playerId);
     renderer.addLayer(new TerrainLayer());
     renderer.addLayer(new TerritoryLayer());
+    renderer.addLayer(new BuildingLayer());
     renderer.addLayer(new UILayer());
     rendererRef.current = renderer;
 
