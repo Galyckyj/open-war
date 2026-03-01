@@ -44,42 +44,42 @@ function isShorelineWater(byte: number): boolean {
 export function getTerrainColorFromPackedByte(byte: number): [number, number, number] {
   const mag = byte & MAGNITUDE_MASK;
 
-  // 1. ПІСОК — суша з SHORELINE (завжди один колір)
-  if (isShore(byte)) return [204, 203, 158];
+  // 1. ПІСОК — золотисто-бежевий
+  if (isShore(byte)) return [212, 196, 142];
 
   const isLand = (byte & IS_LAND_BIT) !== 0;
 
   if (!isLand) {
-    // 2. ВОДА БІЛЯ БЕРЕГА — яскраво-блакитний
-    if (isShorelineWater(byte)) return [100, 143, 255];
-    // 3. ГЛИБОКА ВОДА — темнішає з відстанню від берега (magnitude)
-    const w = { r: 70, g: 132, b: 180 };
+    // 2. ВОДА БІЛЯ БЕРЕГА — бірюзово-блакитна
+    if (isShorelineWater(byte)) return [72, 158, 220];
+    // 3. ГЛИБОКА ВОДА — темна сине-індиго, темнішає з відстанню
+    const w = { r: 48, g: 105, b: 162 };
     const d = 11 - Math.min(mag, 10);
     return [
-      Math.max(0, w.r - 10 + d),
-      Math.max(0, w.g - 10 + d),
-      Math.max(0, w.b - 10 + d),
+      Math.max(0, w.r - 8 + d),
+      Math.max(0, w.g - 8 + d),
+      Math.max(0, w.b - 8 + d),
     ];
   }
 
   // СУША: magnitude 0–9 рівнина, 10–19 highland, 20+ гора
   if (mag < 10) {
-    // 4. РІВНИНИ — зелені, трохи темнішають з magnitude
-    return [190, Math.max(0, 220 - 2 * mag), 138];
+    // 4. РІВНИНИ — тепло-оливкові, темнішають з висотою
+    return [162, Math.max(0, 200 - 2 * mag), 108];
   }
   if (mag < 20) {
-    // 5. HIGHLAND — бежевий/коричнюватий, світлішає з висотою
+    // 5. HIGHLAND — теплі коричнево-охристі
     const m = mag - 10;
     return [
-      Math.min(255, 200 + 2 * m),
-      Math.min(255, 183 + 2 * m),
-      Math.min(255, 138 + 2 * m),
+      Math.min(255, 192 + 2 * m),
+      Math.min(255, 168 + 2 * m),
+      Math.min(255, 118 + 2 * m),
     ];
   }
-  // 6. ГОРИ — сірувато-білі
+  // 6. ГОРИ — холодно-сірі з легким синюватим відтінком
   const m = mag - 20;
-  const v = Math.min(255, 230 + m / 2);
-  return [v, v, v];
+  const v = Math.min(255, 224 + m / 2);
+  return [Math.max(0, v - 10), Math.max(0, v - 6), v];
 }
 
 /**

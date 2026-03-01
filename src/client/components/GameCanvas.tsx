@@ -33,6 +33,8 @@ export interface GameCameraHandle {
   /** Плавно переміщає камеру так, щоб точка (wx, wy) у world-координатах була по центру екрану. */
   flyTo: (wx: number, wy: number) => void;
   getWorldSize: () => { w: number; h: number };
+  /** Повертає індекс тайла за екранними координатами, або null якщо поза межами. */
+  getTileAtScreen: (sx: number, sy: number) => number | null;
 }
 
 interface GameCanvasProps {
@@ -63,6 +65,21 @@ export const GameCanvas = forwardRef<GameCameraHandle, GameCanvasProps>(function
   useImperativeHandle(cameraRef, () => ({
     flyTo: (wx, wy) => { flyTargetRef.current = { wx, wy }; },
     getWorldSize: () => worldSizeRef.current,
+    getTileAtScreen: (sx, sy) => {
+      const el = containerRef.current;
+      const st = stateRef.current;
+      if (!el || !st) return null;
+      const { cols, rows } = st;
+      const { w: worldW, h: worldH } = worldSizeRef.current;
+      const v = viewRef.current;
+      const rect = el.getBoundingClientRect();
+      const wx = (sx - rect.left - v.worldX) / v.scale;
+      const wy = (sy - rect.top  - v.worldY) / v.scale;
+      const col = Math.floor(wx / (worldW / cols));
+      const row = Math.floor(wy / (worldH / rows));
+      if (col < 0 || col >= cols || row < 0 || row >= rows) return null;
+      return row * cols + col;
+    },
   }));
 
   useEffect(() => {
@@ -279,8 +296,8 @@ export const GameCanvas = forwardRef<GameCameraHandle, GameCanvasProps>(function
 
       if (wasOneFinger && dragging) {
         dragging = false;
-        // Тап без переміщення = клік
-        if (!dragMoved && onCellClickRef.current) {
+        // Тап без переміщення = клік (лише для миші — touch обробляє GamePage)
+        if (!dragMoved && onCellClickRef.current && e.pointerType !== 'touch') {
           const st = stateRef.current;
           const cols = st?.cols ?? COLS;
           const rows = st?.rows ?? ROWS;

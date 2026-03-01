@@ -16,7 +16,7 @@ import { getLandTileIndices } from "../shared/utils/landCache";
 
 // ─── Константи ────────────────────────────────────────────────────────────────
 
-export const BOT_COUNT = 100;
+export const BOT_COUNT = 3;
 
 /** Нейтральні кольори ботів — сірі відтінки, щоб не плутати з живими гравцями. */
 const BOT_COLORS = [

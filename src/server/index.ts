@@ -89,7 +89,7 @@ const server = createServer((_req, res) => {
   res.end('Open War game server\n');
 });
 
-const wss = new WebSocketServer({ server });
+const wss = new WebSocketServer({ server, path: '/ws' });
 
 wss.on('connection', (ws) => {
   clientMeta.set(ws, { roomId: null });

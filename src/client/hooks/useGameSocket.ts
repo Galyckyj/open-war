@@ -3,10 +3,11 @@ import type { GamePhase, GameState, CellDelta, BuildingType } from "../../shared
 import { GAME_PORT } from "../../shared/constants";
 import { perfStats } from "../utils/perfStats";
 
+// Підключаємось через той самий хост/порт що й сторінка (Vite проксіює /ws → :3001).
 const WS_URL =
   typeof location !== "undefined"
-    ? `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.hostname === "localhost" ? "127.0.0.1" : location.hostname}:${GAME_PORT}`
-    : `ws://127.0.0.1:${GAME_PORT}`;
+    ? `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/ws`
+    : `ws://127.0.0.1:${GAME_PORT}/ws`;
 
 /** Як часто оновлювати UI (Leaderboard) — лише лёгкий snapshot, без cells. */
 const UI_REFRESH_EVERY_TICKS = 10;
